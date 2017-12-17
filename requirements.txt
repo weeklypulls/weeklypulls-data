@@ -5,5 +5,3 @@ djangorestframework==3.6.3
 gunicorn==19.6.0
 psycopg2==2.6.2
 whitenoise==3.2.2
-# marvelous==1.0.4
--e git+git://github.com/rkuykendall/marvelous.git#egg=marvelous

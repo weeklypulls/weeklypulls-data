@@ -16,12 +16,8 @@ Including another URLconf
 from django.conf.urls import url, include
 from django.contrib import admin
 from weeklypulls.apps.series import views as series_views
-from weeklypulls.apps.comics import views as comic_views
 
 urlpatterns = [
     url(r'^', include(series_views.router.urls)),
     url(r'^admin/', admin.site.urls),
-    url(
-        r'^comics/week/([0-9]{4}\-[0-9]{2}\-[0-9]{2})/$',
-        comic_views.comic_week),
 ]

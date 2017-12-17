@@ -39,8 +39,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'corsheaders',
-    'weeklypulls.apps.comics',
-    'weeklypulls.apps.marvel',
     'weeklypulls.apps.series',
     'rest_framework',
 ]
