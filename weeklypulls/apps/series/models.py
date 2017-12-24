@@ -1,22 +1,12 @@
-from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
-from django.db.models.signals import post_save
-from django.dispatch import receiver
 
-from rest_framework.authtoken.models import Token
+from weeklypulls.apps.base.models import AbstractBaseModel
 
 
-@receiver(post_save, sender=settings.AUTH_USER_MODEL)
-def create_auth_token(sender, instance=None, created=False, **kwargs):
-    if created:
-        Token.objects.create(user=instance)
-
-
-class Series(models.Model):
-    created_at = models.DateTimeField(auto_now_add=True)
+class Series(AbstractBaseModel):
     read = ArrayField(models.IntegerField(), default=list)
-    series_id = models.IntegerField(unique=True)
+    series_id = models.IntegerField()
     skipped = ArrayField(models.IntegerField(), default=list)
 
     class Meta:

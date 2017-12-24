@@ -41,7 +41,9 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
     'rest_framework.authtoken',
+    'weeklypulls.apps.base',
     'weeklypulls.apps.series',
+    'weeklypulls.apps.lists',
 ]
 
 REST_FRAMEWORK = {
