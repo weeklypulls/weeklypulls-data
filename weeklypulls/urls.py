@@ -16,7 +16,7 @@ Including another URLconf
 from django.conf.urls import url, include
 from django.contrib import admin
 from weeklypulls.apps.series import views as series_views
-from weeklypulls.apps.lists import views as list_views
+from weeklypulls.apps.pull_lists import views as list_views
 from rest_framework.authtoken import views as authtoken_views
 
 urlpatterns = [

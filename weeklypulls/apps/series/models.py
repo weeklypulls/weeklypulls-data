@@ -8,6 +8,7 @@ class Series(AbstractBaseModel):
     read = ArrayField(models.IntegerField(), default=list)
     series_id = models.IntegerField()
     skipped = ArrayField(models.IntegerField(), default=list)
+    # list = models.ForeignKey(Reporter, on_delete=models.CASCADE)
 
     class Meta:
         verbose_name_plural = "series"
