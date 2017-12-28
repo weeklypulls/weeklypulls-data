@@ -5,7 +5,7 @@ from rest_framework import routers, serializers, viewsets
 class SeriesSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Series
-        fields = ('id', 'series_id', 'read', 'skipped', 'pull_list', )
+        fields = ('id', 'series_id', 'read', 'skipped', 'pull_list_id', )
 
 
 class SeriesViewSet(viewsets.ModelViewSet):
