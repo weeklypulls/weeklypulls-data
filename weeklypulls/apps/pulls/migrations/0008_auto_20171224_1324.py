@@ -7,8 +7,8 @@ import uuid
 
 
 def create_uuid(apps, schema_editor):
-    Series = apps.get_model('series', 'Series')
-    for series in Series.objects.all():
+    Pull = apps.get_model('pulls', 'Pull')
+    for series in Pull.objects.all():
         series.idu = uuid.uuid4()
         series.save()
 
@@ -16,7 +16,7 @@ def create_uuid(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('series', '0007_auto_20171224_1320'),
+        ('pulls', '0007_auto_20171224_1320'),
     ]
 
     operations = [

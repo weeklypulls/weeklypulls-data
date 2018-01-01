@@ -42,7 +42,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     'weeklypulls.apps.base',
-    'weeklypulls.apps.series',
+    'weeklypulls.apps.pulls',
     'weeklypulls.apps.pull_lists',
 ]
 

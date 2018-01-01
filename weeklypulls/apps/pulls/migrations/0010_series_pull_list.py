@@ -11,7 +11,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('pull_lists', '0002_auto_20171224_1555'),
-        ('series', '0009_auto_20171224_1540'),
+        ('pulls', '0009_auto_20171224_1540'),
     ]
 
     operations = [

@@ -1,22 +1,22 @@
-from weeklypulls.apps.series.models import Series
+from weeklypulls.apps.pulls.models import Pull
 from rest_framework import routers, serializers, viewsets
 
 from weeklypulls.apps.pull_lists.models import PullList
 
 
-class SeriesSerializer(serializers.HyperlinkedModelSerializer):
+class PullSerializer(serializers.HyperlinkedModelSerializer):
     pull_list_id = serializers.PrimaryKeyRelatedField(
         source='pull_list', queryset=PullList.objects.all())
 
     class Meta:
-        model = Series
+        model = Pull
         fields = ('id', 'series_id', 'read', 'skipped', 'pull_list_id', )
 
 
-class SeriesViewSet(viewsets.ModelViewSet):
-    queryset = Series.objects.all()
-    serializer_class = SeriesSerializer
+class PullViewSet(viewsets.ModelViewSet):
+    queryset = Pull.objects.all()
+    serializer_class = PullSerializer
 
 
 router = routers.DefaultRouter()
-router.register(r'series', SeriesViewSet)
+router.register(r'pulls', PullViewSet)

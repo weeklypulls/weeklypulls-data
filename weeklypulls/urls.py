@@ -15,13 +15,13 @@ Including another URLconf
 """
 from django.conf.urls import url, include
 from django.contrib import admin
-from weeklypulls.apps.series import views as series_views
-from weeklypulls.apps.pull_lists import views as list_views
+from weeklypulls.apps.pulls import views as pull_views
+from weeklypulls.apps.pull_lists import views as pull_list_views
 from rest_framework.authtoken import views as authtoken_views
 
 urlpatterns = [
-    url(r'^', include(list_views.router.urls)),
-    url(r'^', include(series_views.router.urls)),
+    url(r'^', include(pull_list_views.router.urls)),
+    url(r'^', include(pull_views.router.urls)),
     url(r'^admin/', admin.site.urls),
     url(r'^api-token-auth/', authtoken_views.obtain_auth_token),
 ]
