@@ -1,6 +1,8 @@
 from weeklypulls.apps.pull_lists.models import PullList
 from rest_framework import routers, serializers, viewsets
+
 from weeklypulls.apps.pull_lists.permissions import IsOwner
+from weeklypulls.apps.base.filters import IsOwnerFilterBackend
 
 
 class PullListSerializer(serializers.HyperlinkedModelSerializer):
@@ -16,6 +18,7 @@ class PullListViewSet(viewsets.ModelViewSet):
     serializer_class = PullListSerializer
 
     permission_classes = (IsOwner, )
+    filter_backends = (IsOwnerFilterBackend, )
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
