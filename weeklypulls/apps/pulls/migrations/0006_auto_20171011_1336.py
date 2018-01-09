@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.AlterField(
-            model_name='series',
+            model_name='pull',
             name='series_id',
             field=models.IntegerField(unique=True),
         ),

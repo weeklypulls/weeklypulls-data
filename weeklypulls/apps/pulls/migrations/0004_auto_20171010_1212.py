@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.AlterModelOptions(
-            name='series',
-            options={'verbose_name_plural': 'series'},
+            name='pull',
+            options={'verbose_name_plural': 'pulls'},
         ),
     ]

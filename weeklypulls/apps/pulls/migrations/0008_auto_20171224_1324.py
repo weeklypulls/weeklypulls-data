@@ -8,9 +8,9 @@ import uuid
 
 def create_uuid(apps, schema_editor):
     Pull = apps.get_model('pulls', 'Pull')
-    for series in Pull.objects.all():
-        series.idu = uuid.uuid4()
-        series.save()
+    for pull in Pull.objects.all():
+        pull.idu = uuid.uuid4()
+        pull.save()
 
 
 class Migration(migrations.Migration):
@@ -22,11 +22,11 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(create_uuid),
         migrations.RemoveField(
-            model_name='series',
+            model_name='pull',
             name='id',
         ),
         migrations.AlterField(
-            model_name='series',
+            model_name='pull',
             name='idu',
             field=models.UUIDField(default=uuid.uuid4, primary_key=True, serialize=False),
         ),

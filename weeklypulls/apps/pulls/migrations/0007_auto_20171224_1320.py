@@ -14,22 +14,22 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.AddField(
-            model_name='series',
+            model_name='pull',
             name='idu',
             field=models.UUIDField(default=uuid.uuid4),
         ),
         migrations.AddField(
-            model_name='series',
+            model_name='pull',
             name='modified_at',
             field=models.DateTimeField(auto_now=True, db_index=True),
         ),
         migrations.AlterField(
-            model_name='series',
+            model_name='pull',
             name='created_at',
             field=models.DateTimeField(auto_now_add=True, db_index=True),
         ),
         migrations.AlterField(
-            model_name='series',
+            model_name='pull',
             name='series_id',
             field=models.IntegerField(),
         ),

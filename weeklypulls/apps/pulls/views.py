@@ -2,6 +2,7 @@ from weeklypulls.apps.pulls.models import Pull
 from rest_framework import routers, serializers, viewsets
 
 from weeklypulls.apps.pull_lists.models import PullList
+from weeklypulls.apps.pulls.permissions import IsPullListOwner
 
 
 class PullSerializer(serializers.HyperlinkedModelSerializer):
@@ -16,6 +17,8 @@ class PullSerializer(serializers.HyperlinkedModelSerializer):
 class PullViewSet(viewsets.ModelViewSet):
     queryset = Pull.objects.all()
     serializer_class = PullSerializer
+
+    permission_classes = (IsPullListOwner, )
 
 
 router = routers.DefaultRouter()

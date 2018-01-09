@@ -14,12 +14,12 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.AlterField(
-            model_name='series',
+            model_name='pull',
             name='read',
             field=django.contrib.postgres.fields.ArrayField(base_field=models.IntegerField(), blank=True, size=None),
         ),
         migrations.AlterField(
-            model_name='series',
+            model_name='pull',
             name='skipped',
             field=django.contrib.postgres.fields.ArrayField(base_field=models.IntegerField(), blank=True, size=None),
         ),

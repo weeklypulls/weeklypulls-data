@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RenameField(
-            model_name='series',
+            model_name='pull',
             old_name='idu',
             new_name='id',
         ),
