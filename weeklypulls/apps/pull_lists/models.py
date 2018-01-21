@@ -6,7 +6,7 @@ from weeklypulls.apps.base.models import AbstractBaseModel
 
 class PullList(AbstractBaseModel):
     title = CharField(max_length=280)
-    owner = ForeignKey('auth.User', related_name='snippets', on_delete=CASCADE)
+    owner = ForeignKey('auth.User', related_name='pull_lists', on_delete=CASCADE)
 
     class Meta:
         verbose_name_plural = "pull lists"

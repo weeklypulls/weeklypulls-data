@@ -19,6 +19,8 @@ class PullViewSet(viewsets.ModelViewSet):
     queryset = Pull.objects.all()
     serializer_class = PullSerializer
 
+    owner_lookup_field = 'pull_list__owner'
+
     permission_classes = (IsPullListOwner, )
     filter_backends = (IsOwnerFilterBackend, )
 
