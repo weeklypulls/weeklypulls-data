@@ -17,6 +17,8 @@ class PullListViewSet(viewsets.ModelViewSet):
     queryset = PullList.objects.all()
     serializer_class = PullListSerializer
 
+    owner_lookup_field = 'owner'
+
     permission_classes = (IsOwner, )
     filter_backends = (IsOwnerFilterBackend, )
 
