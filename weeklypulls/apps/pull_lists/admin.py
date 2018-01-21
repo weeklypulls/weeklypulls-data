@@ -3,7 +3,7 @@ from weeklypulls.apps.pull_lists.models import PullList
 
 
 class PullListsAdmin(admin.ModelAdmin):
-    fields = ('title', )
+    fields = ('title', 'owner', )
     ordering = ('title',)
 
 
