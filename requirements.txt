@@ -1,7 +1,8 @@
 dj-database-url==0.4.1
 django-cors-headers==2.1.0
-Django==1.10.3
+Django==1.10.8
 djangorestframework==3.6.3
 gunicorn==19.6.0
 psycopg2==2.7.3
 whitenoise==3.2.2
+safety
