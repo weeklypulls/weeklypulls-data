@@ -8,7 +8,7 @@ from django.core.management import BaseCommand, CommandError
 from django.core.validators import URLValidator
 from requests.exceptions import ConnectionError
 
-from weeklypulls.apps.pulls.models import Pull
+from weeklypulls.apps.pulls.models import Pull, MUPull
 
 
 class Command(BaseCommand):
@@ -20,8 +20,12 @@ class Command(BaseCommand):
             # validate it's a good url
             URLValidator()(settings.MAPI_URL)
             # get all known series
-            series_ids = [record['series_id']
-                          for record in Pull.objects.values('series_id').distinct()]
+            series_ids = set(
+                list(Pull.objects.order_by('series_id').distinct('series_id')
+                     .values_list('series_id', flat=True)) +
+                list(MUPull.objects.order_by('series_id').distinct('series_id')
+                     .values_list('series_id', flat=True))
+            )
             # ping the api
             for series_id in series_ids:
                 requests.get(f'{settings.MAPI_URL}/series/{series_id}')
