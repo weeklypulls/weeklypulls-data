@@ -1,9 +1,12 @@
 arrow==0.13.1
 dj-database-url==0.4.1
 django-cors-headers==2.1.0
+django-heroku-memcacheify>=0.3
+django-heroku-postgresify>=0.2
 Django==1.10.8
 djangorestframework==3.6.3
 gunicorn==19.6.0
+pylibmc>=1.2.3
 psycopg2==2.7.3
 whitenoise==3.2.2
 safety

@@ -149,5 +149,8 @@ STATICFILES_STORAGE = 'whitenoise.django.GzipManifestStaticFilesStorage'
 
 CORS_ORIGIN_ALLOW_ALL = True
 
+# email config
+from herokuify.mail.sendgrid import EMAIL_HOST, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, EMAIL_PORT, EMAIL_USE_TLS
+
 # location of weeklypulls-marvel
 MAPI_URL = os.getenv('MAPI_URL', 'https://weeklypulls-marvel.herokuapp.com')
