@@ -1,0 +1,7 @@
+LC_ALL=C.UTF-8
+POSTGRES_USER=weeklypulls
+POSTGRES_PASSWORD=weeklypulls
+POSTGRES_DB=weeklypulls
+DJANGO_SETTINGS_MODULE=weeklypulls.settings
+DJANGO_SECRET_KEY=randomcharacters
+DATABASE_URL=postgres://weeklypulls:weeklypulls@db:5432/weeklypulls
