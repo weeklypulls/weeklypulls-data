@@ -1,6 +1,7 @@
 from datetime import datetime
 from time import sleep
 
+import arrow
 import requests
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -30,6 +31,11 @@ class Command(BaseCommand):
             for series_id in series_ids:
                 requests.get(f'{settings.MAPI_URL}/series/{series_id}')
                 sleep(0.01)  # be gentle
+
+            # prime the week
+            start, end = arrow.utcnow().span('week')
+            requests.get(f'{settings.MAPI_URL}/weeks/{start:%Y-%m-%d}')
+
             self.stdout.write(f'Cache primed in {datetime.now() - start_marker}')
         except AttributeError:
             raise CommandError('Please add MAPI_URL to your settings.')
