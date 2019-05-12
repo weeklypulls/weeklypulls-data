@@ -29,6 +29,16 @@ class PullViewSet(viewsets.ModelViewSet):
     permission_classes = (IsPullListOwner, )
     filter_backends = (IsOwnerFilterBackend, )
 
+    def create(self, request, *args, **kwargs):
+        """ overridden to allow for bulk-creation. """
+        is_multiple = isinstance(request.data, list)
+        serializer = self.get_serializer(data=request.data, many=is_multiple)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
 
 class MUPullSerializer(serializers.HyperlinkedModelSerializer):
     pull_list_id = serializers.PrimaryKeyRelatedField(
@@ -47,6 +57,15 @@ class MUPullViewSet(viewsets.ModelViewSet, CreateModelMixin):
 
     permission_classes = (IsPullListOwner, )
     filter_backends = (IsOwnerFilterBackend, )
+
+    def create(self, request, *args, **kwargs):
+        """ overridden to allow for bulk-creation. """
+        is_multiple = isinstance(request.data, list)
+        serializer = self.get_serializer(data=request.data, many=is_multiple)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 
 router = routers.DefaultRouter()

@@ -45,3 +45,24 @@ def test_mupulls(live_server, requests_client):
     for d in result: d.pop('id')
     assert pull_1 in result
     assert pull_2 in result
+
+    # check bulk creation
+    pull_bulk = [{'pull_list_id': pl_id,
+                  'series_id': i} for i in range(1, 3)]
+
+    response = requests_client.post(f'{live_server.url}/mupulls/',
+                                    json=pull_bulk)
+    assert response.status_code == 201
+    response = requests_client.get(f'{live_server.url}/mupulls/')
+    assert response.status_code == 200
+    result = response.json()
+    assert len(result) == 4
+
+    # check deletion
+    response = requests_client.delete(f'{live_server.url}/mupulls/{result[0]["id"]}/')
+    assert response.status_code == 204
+    response = requests_client.get(f'{live_server.url}/mupulls/')
+    result = response.json()
+    assert len(result) == 3
+
+
