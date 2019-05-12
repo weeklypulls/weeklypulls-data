@@ -6,6 +6,7 @@ from rest_framework.test import APIClient, RequestsClient
 def enable_db_access_for_all_tests(db):
     pass
 
+
 @pytest.fixture
 def api_client(django_user_model):
     username = "user1"
@@ -16,6 +17,7 @@ def api_client(django_user_model):
     client.credentials(HTTP_AUTHORIZATION='TOKEN ' + user.auth_token.key)
     return client
 
+
 @pytest.fixture
 def requests_client(django_user_model):
     username = "user1"
@@ -24,4 +26,3 @@ def requests_client(django_user_model):
     client = RequestsClient()
     client.headers.update({'Authorization': f'TOKEN {user.auth_token.key}'})
     return client
-

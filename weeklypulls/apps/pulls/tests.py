@@ -1,18 +1,12 @@
-from time import sleep
-
-from django.conf import settings
-from rest_framework.test import RequestsClient
-
 def test_mupulls(live_server, requests_client):
-
     # create a MU-enabled pull-list
     data = {
         'title': 'test mu',
         'mu_enabled': True
     }
-    response=requests_client.post(f'{live_server.url}/pull-lists/',
-                           json=data,
-                           )
+    response = requests_client.post(f'{live_server.url}/pull-lists/',
+                                    json=data,
+                                    )
     assert response.status_code == 201
     result = response.json()
     assert result['title'] == data['title']
@@ -28,7 +22,7 @@ def test_mupulls(live_server, requests_client):
     pull_1 = {'pull_list_id': pl_id,
               'series_id': 23012}
     response = requests_client.post(f'{live_server.url}/mupulls/',
-                    json=pull_1)
+                                    json=pull_1)
     assert response.status_code == 201
     result = response.json()
     assert result['pull_list_id'] == pull_1['pull_list_id']
@@ -38,7 +32,7 @@ def test_mupulls(live_server, requests_client):
     pull_2 = {'pull_list_id': pl_id,
               'series_id': 23013}
     response = requests_client.post(f'{live_server.url}/mupulls/',
-                    json=pull_2)
+                                    json=pull_2)
     assert response.status_code == 201
 
     # check they are returned in view
@@ -51,6 +45,3 @@ def test_mupulls(live_server, requests_client):
     for d in result: d.pop('id')
     assert pull_1 in result
     assert pull_2 in result
-
-
-
