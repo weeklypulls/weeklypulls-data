@@ -30,7 +30,7 @@ class MUAlertsTest(TestCase):
         issue_ok = 1
         issue_fail = 2
 
-        six_months_ago = arrow.utcnow().replace(months=-6).date()
+        six_months_ago = arrow.utcnow().shift(months=-6).date()
         alert1 = MUPullAlert.create_for_issue(issue_ok, self.series_1, six_months_ago)
         alert2 = MUPullAlert.create_for_issue(issue_ok, self.series_2, six_months_ago)
         alert3 = MUPullAlert.create_for_issue(issue_fail, self.series_1, six_months_ago.replace(day=+14))
