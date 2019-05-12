@@ -1,5 +1,10 @@
+from django.http import Http404
+from rest_framework.mixins import CreateModelMixin
+from rest_framework.request import clone_request
+from rest_framework.response import Response
+
 from weeklypulls.apps.pulls.models import Pull, MUPull
-from rest_framework import routers, serializers, viewsets
+from rest_framework import routers, serializers, viewsets, status
 
 from weeklypulls.apps.base.filters import IsOwnerFilterBackend
 from weeklypulls.apps.pull_lists.models import PullList
@@ -30,11 +35,11 @@ class MUPullSerializer(serializers.HyperlinkedModelSerializer):
         source='pull_list', queryset=PullList.objects.all())
 
     class Meta:
-        model = Pull
+        model = MUPull
         fields = ('id', 'series_id', 'pull_list_id', )
 
 
-class MUPullViewSet(viewsets.ModelViewSet):
+class MUPullViewSet(viewsets.ModelViewSet, CreateModelMixin):
     queryset = MUPull.objects.all()
     serializer_class = MUPullSerializer
 
