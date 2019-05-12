@@ -1,4 +1,4 @@
-from weeklypulls.apps.pulls.models import Pull
+from weeklypulls.apps.pulls.models import Pull, MUPull
 from rest_framework import routers, serializers, viewsets
 
 from weeklypulls.apps.base.filters import IsOwnerFilterBackend
@@ -25,5 +25,25 @@ class PullViewSet(viewsets.ModelViewSet):
     filter_backends = (IsOwnerFilterBackend, )
 
 
+class MUPullSerializer(serializers.HyperlinkedModelSerializer):
+    pull_list_id = serializers.PrimaryKeyRelatedField(
+        source='pull_list', queryset=PullList.objects.all())
+
+    class Meta:
+        model = Pull
+        fields = ('id', 'series_id', 'pull_list_id', )
+
+
+class MUPullViewSet(viewsets.ModelViewSet):
+    queryset = MUPull.objects.all()
+    serializer_class = MUPullSerializer
+
+    owner_lookup_field = 'pull_list__owner'
+
+    permission_classes = (IsPullListOwner, )
+    filter_backends = (IsOwnerFilterBackend, )
+
+
 router = routers.DefaultRouter()
 router.register(r'pulls', PullViewSet)
+router.register(r'mupulls', MUPullViewSet)
