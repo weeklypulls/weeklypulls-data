@@ -113,6 +113,7 @@ STATIC_URL = '/static/'
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # email config
+DEFAULT_FROM_EMAIL = 'WeeklyPulls <staff@weeklypulls.com>'
 from herokuify.mail.sendgrid import EMAIL_HOST, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, EMAIL_PORT, EMAIL_USE_TLS
 
 # location of weeklypulls-marvel
