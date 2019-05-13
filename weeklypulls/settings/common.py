@@ -35,6 +35,8 @@ REST_FRAMEWORK = {
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    # enable this for site-wide caching
+    # 'django.middleware.cache.UpdateCacheMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -42,6 +44,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # enable this for site-wide caching
+    # 'django.middleware.cache.FetchFromCacheMiddleware',
 ]
 
 ROOT_URLCONF = 'weeklypulls.urls'
@@ -109,12 +113,19 @@ STATIC_URL = '/static/'
 
 # Simplified static file serving.
 # https://warehouse.python.org/project/whitenoise/
-
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# caching
+from herokuify import get_cache_config
+CACHES = get_cache_config()
+CACHE_MIDDLEWARE_ALIAS = "weeklypulls"
+CACHE_MIDDLEWARE_SECONDS = 300  # seconds
+CACHE_MIDDLEWARE_KEY_PREFIX = "wps_"
 
 # email config
 DEFAULT_FROM_EMAIL = 'WeeklyPulls <staff@weeklypulls.com>'
-from herokuify.mail.sendgrid import EMAIL_HOST, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD, EMAIL_PORT, EMAIL_USE_TLS
+from herokuify.mail.sendgrid import EMAIL_HOST, EMAIL_HOST_USER, \
+    EMAIL_HOST_PASSWORD, EMAIL_PORT, EMAIL_USE_TLS
 
 # location of weeklypulls-marvel
 MAPI_URL = os.getenv('MAPI_URL', 'https://weeklypulls-marvel.herokuapp.com')
