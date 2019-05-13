@@ -7,10 +7,10 @@ from weeklypulls.apps.pull_lists.models import PullList
 
 
 class Pull(AbstractBaseModel):
-    read = ArrayField(models.IntegerField(), default=list)
-    series_id = models.IntegerField()
-    skipped = ArrayField(models.IntegerField(), default=list)
     pull_list = models.ForeignKey(PullList, on_delete=models.CASCADE)
+    series_id = models.IntegerField()
+    read = ArrayField(models.IntegerField(), default=list)
+    skipped = ArrayField(models.IntegerField(), default=list)
 
     class Meta:
         verbose_name_plural = "pulls"
