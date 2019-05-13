@@ -23,11 +23,17 @@ class MUPull(AbstractBaseModel):
     pull_list = models.ForeignKey(PullList, on_delete=models.CASCADE)
     series_id = models.IntegerField()
 
+    def __str__(self):
+        return f'{self.pull_list} / Series {self.series_id} '
+
 
 class MUPullAlert(AbstractBaseModel):
     series_id = models.IntegerField()
     issue_id = models.IntegerField()
     alert_date = models.DateField()
+
+    def __str__(self):
+        return f'Series {self.series_id} / Issue {self.issue_id} / {self.alert_date}'
 
     @staticmethod
     def create_for_issue(issue_id, series_id, publication_date):
