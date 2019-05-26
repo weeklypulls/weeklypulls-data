@@ -15,9 +15,14 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sites',
     'corsheaders',
     'rest_framework',
     'rest_framework.authtoken',
+    'allauth',
+    'allauth.account',
+    'rest_auth',
+    'rest_auth.registration',
     'weeklypulls.apps.base',
     'weeklypulls.apps.pulls',
     'weeklypulls.apps.pull_lists',
@@ -110,6 +115,7 @@ PROJECT_ROOT = BASE_DIR.parent
 
 STATIC_ROOT =  PROJECT_ROOT / 'staticfiles'
 STATIC_URL = '/static/'
+SITE_ID = 1
 
 # Simplified static file serving.
 # https://warehouse.python.org/project/whitenoise/

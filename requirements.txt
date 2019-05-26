@@ -6,6 +6,8 @@ django-heroku-postgresify>=0.2
 django-herokuify==1.0rc3
 django==2.2.1
 djangorestframework==3.9.4
+django-allauth==0.39.1
+django-rest-auth==0.9.5
 gunicorn==19.9.0
 pylibmc>=1.2.3
 psycopg2==2.8.2
