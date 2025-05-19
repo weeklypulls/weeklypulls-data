@@ -21,11 +21,12 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'allauth',
     'allauth.account',
-    'rest_auth',
-    'rest_auth.registration',
+    'allauth.socialaccount',
+    'dj_rest_auth',
+    'dj_rest_auth.registration',
     'weeklypulls.apps.base',
-    'weeklypulls.apps.pulls',
-    'weeklypulls.apps.pull_lists',
+    'weeklypulls.apps.pulls.apps.PullsConfig',
+    'weeklypulls.apps.pull_lists.apps.ListsConfig',
 ]
 
 REST_FRAMEWORK = {
@@ -47,6 +48,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'allauth.account.middleware.AccountMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     # enable this for site-wide caching
@@ -122,16 +124,19 @@ SITE_ID = 1
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # caching
-from herokuify import get_cache_config
-CACHES = get_cache_config()
+import django_cache_url
+CACHES = {'default': django_cache_url.config(default='locmem://')}
 CACHE_MIDDLEWARE_ALIAS = "weeklypulls"
 CACHE_MIDDLEWARE_SECONDS = 300  # seconds
 CACHE_MIDDLEWARE_KEY_PREFIX = "wps_"
 
 # email config
 DEFAULT_FROM_EMAIL = 'WeeklyPulls <staff@weeklypulls.com>'
-from herokuify.mail.sendgrid import EMAIL_HOST, EMAIL_HOST_USER, \
-    EMAIL_HOST_PASSWORD, EMAIL_PORT, EMAIL_USE_TLS
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.sendgrid.net')
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
+EMAIL_USE_TLS = bool(os.environ.get('EMAIL_USE_TLS', True))
 
 # location of weeklypulls-marvel
 MAPI_URL = os.getenv('MAPI_URL', 'https://weeklypulls-marvel.herokuapp.com')

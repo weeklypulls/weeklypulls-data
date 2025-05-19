@@ -1,18 +1,14 @@
-FROM python:3.6-alpine3.9
+FROM python:3.11-alpine3.18
 
-ENV PYTHONUNBUFFERED=0
+ENV PYTHONUNBUFFERED=1
 
 RUN apk add --no-cache gcc \
                        musl-dev \
                        postgresql-dev \
                        libmemcached-dev \
                        cyrus-sasl-dev \
-                       zlib-dev
-
-# For using early releases of marvelous
-RUN apk update && \
-   apk upgrade && \
-   apk add git
+                       zlib-dev \
+                       git
 
 RUN mkdir /app
 

@@ -1,8 +1,13 @@
-version: '3'
+ver  db:
+    image: postgres:16.1
+    env_file:
+      - .env
+    volumes:
+      - pgdata:/var/lib/postgresql/data/'3'
 
 services:
   db:
-    image: postgres:11.2
+    image: postgres:15.3
     env_file:
       - .env
     volumes:
