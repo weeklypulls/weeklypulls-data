@@ -4,3 +4,11 @@ build
 workspace.xml
 .idea
 .env
+venv/
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+*.sqlite3
