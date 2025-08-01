@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     'weeklypulls.apps.base',
     'weeklypulls.apps.pulls.apps.PullsConfig',
     'weeklypulls.apps.pull_lists.apps.ListsConfig',
+    'weeklypulls.apps.comicvine.apps.ComicvineConfig',
 ]
 
 REST_FRAMEWORK = {
@@ -138,5 +139,11 @@ EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
 EMAIL_USE_TLS = bool(os.environ.get('EMAIL_USE_TLS', True))
 
-# location of weeklypulls-marvel
+# location of weeklypulls-marvel (deprecated)
 MAPI_URL = os.getenv('MAPI_URL', 'https://weeklypulls-marvel.herokuapp.com')
+
+# ComicVine API configuration
+COMICVINE_API_KEY = os.getenv('COMICVINE_API_KEY', '')
+COMICVINE_API_BASE_URL = 'https://comicvine.gamespot.com/api'
+COMICVINE_RATE_LIMIT_PER_HOUR = 200  # ComicVine's strict limit
+COMICVINE_CACHE_EXPIRE_HOURS = 24  # How long to cache data

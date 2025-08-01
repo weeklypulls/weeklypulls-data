@@ -11,4 +11,5 @@ pylibmc>=1.6.3
 psycopg2-binary>=2.9.6
 whitenoise>=6.5.0
 django-cache-url>=3.4.4
+simyan>=1.5.1
 safety
