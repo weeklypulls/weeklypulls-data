@@ -17,6 +17,21 @@ class Pull(AbstractBaseModel):
 
     def __str__(self):
         return 'Pull for {}'.format(self.series_id)
+    
+    def get_comicvine_volume_info(self):
+        """Get ComicVine volume information if cached"""
+        try:
+            from weeklypulls.apps.comicvine.models import ComicVineVolume
+            volume = ComicVineVolume.objects.get(cv_id=self.series_id)
+            return f"{volume.name} ({volume.start_year})" if volume.start_year else volume.name
+        except ComicVineVolume.DoesNotExist:
+            return None
+    
+    @property
+    def comicvine_volume_display(self):
+        """Display ComicVine volume info or series ID as fallback"""
+        cv_info = self.get_comicvine_volume_info()
+        return cv_info if cv_info else f"Series {self.series_id}"
 
 
 class MUPull(AbstractBaseModel):
