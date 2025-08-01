@@ -11,34 +11,12 @@ class PullsAdmin(admin.ModelAdmin):
     
     def get_queryset(self, request):
         """Optimize queryset to avoid N+1 queries for ComicVine volumes"""
-        queryset = super().get_queryset(request)
-        
-        # Prefetch ComicVine volumes in a single query
-        from weeklypulls.apps.comicvine.models import ComicVineVolume
-        
-        # Get all unique series_ids from the current page
-        series_ids = list(queryset.values_list('series_id', flat=True).distinct())
-        
-        # Fetch all ComicVine volumes for these series in one query
-        volumes = ComicVineVolume.objects.filter(cv_id__in=series_ids)
-        volume_lookup = {vol.cv_id: vol for vol in volumes}
-        
-        # Cache the volumes on each object to avoid individual queries
-        pulls = list(queryset)
-        for pull in pulls:
-            pull._cached_comicvine_volume = volume_lookup.get(pull.series_id)
-        
-        return pulls
+        return super().get_queryset(request)
     
     def comicvine_volume_display(self, obj):
         """Display ComicVine volume info or series ID as fallback"""
-        # Use cached volume if available
-        if hasattr(obj, '_cached_comicvine_volume') and obj._cached_comicvine_volume:
-            volume = obj._cached_comicvine_volume
-            return f"{volume.name} ({volume.start_year})" if volume.start_year else volume.name
-        
-        # Fallback to series ID
-        return f"Series {obj.series_id}"
+        # Use the model's property method
+        return obj.comicvine_volume_display
     comicvine_volume_display.short_description = 'Series'
     comicvine_volume_display.admin_order_field = 'series_id'
     
