@@ -1,4 +1,5 @@
 from django.core.management.base import BaseCommand
+from django.utils import timezone
 from weeklypulls.apps.comicvine.services import ComicVineService
 from weeklypulls.apps.pulls.models import Pull, MUPull
 
@@ -20,7 +21,12 @@ class Command(BaseCommand):
         parser.add_argument(
             '--cache-all-volumes', 
             action='store_true', 
-            help='Cache all volumes from existing pulls (use carefully!)'
+            help='Cache all volumes from existing pulls (skips already cached ones)'
+        )
+        parser.add_argument(
+            '--force-refresh-all', 
+            action='store_true', 
+            help='Force refresh all volumes, ignoring existing cache'
         )
 
     def handle(self, *args, **options):
@@ -52,24 +58,52 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.ERROR(f"✗ Failed to fetch volume {volume_id}"))
             return
         
-        if options['cache_all_volumes']:
-            self.stdout.write("Caching all volumes from existing pulls...")
+        if options['cache_all_volumes'] or options['force_refresh_all']:
+            action = "force refreshing" if options['force_refresh_all'] else "caching"
+            self.stdout.write(f"Starting {action} of all volumes from existing pulls...")
             
             # Get all unique series IDs from Pull and MUPull (these are now ComicVine volume IDs)
             pull_volumes = set(Pull.objects.values_list('series_id', flat=True))
             mupull_volumes = set(MUPull.objects.values_list('series_id', flat=True))
             all_volumes = pull_volumes.union(mupull_volumes)
             
-            self.stdout.write(f"Found {len(all_volumes)} unique volumes to cache")
+            if options['force_refresh_all']:
+                # Force refresh all volumes
+                volumes_to_fetch = all_volumes
+                already_cached = set()
+                self.stdout.write(f"Found {len(all_volumes)} unique volumes to force refresh")
+            else:
+                # Check which volumes are already cached and fresh
+                from weeklypulls.apps.comicvine.models import ComicVineVolume
+                already_cached = set(
+                    ComicVineVolume.objects.filter(
+                        cv_id__in=all_volumes,
+                        api_fetch_failed=False
+                    ).exclude(
+                        cache_expires__lt=timezone.now()  # Exclude expired cache
+                    ).values_list('cv_id', flat=True)
+                )
+                
+                volumes_to_fetch = all_volumes - already_cached
+                
+                self.stdout.write(f"Found {len(all_volumes)} unique volumes total")
+                self.stdout.write(f"Already cached (fresh): {len(already_cached)}")
+                self.stdout.write(f"Volumes to fetch: {len(volumes_to_fetch)}")
+                
+                if not volumes_to_fetch:
+                    self.stdout.write(self.style.SUCCESS("All volumes are already cached and fresh!"))
+                    return
             
             success_count = 0
             failure_count = 0
             
-            for volume_id in sorted(all_volumes):
+            for volume_id in sorted(volumes_to_fetch):
                 self.stdout.write(f"Caching volume {volume_id}...")
                 
                 try:
-                    volume = service.get_volume(volume_id)
+                    # Use force_refresh if this is a force refresh operation
+                    force_refresh = options['force_refresh_all']
+                    volume = service.get_volume(volume_id, force_refresh=force_refresh)
                     if volume and not volume.api_fetch_failed:
                         success_count += 1
                         self.stdout.write(f"  ✓ {volume.name}")
@@ -83,9 +117,10 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.SUCCESS(
                     f"\nCaching complete:\n"
-                    f"  Success: {success_count}\n"
+                    f"  Already cached: {len(already_cached)}\n"
+                    f"  Newly cached: {success_count}\n"
                     f"  Failures: {failure_count}\n"
-                    f"  Total: {len(all_volumes)}"
+                    f"  Total volumes: {len(all_volumes)}"
                 )
             )
             return
@@ -97,4 +132,5 @@ class Command(BaseCommand):
             "  python manage.py test_comicvine --rate-limit-status\n"
             "  python manage.py test_comicvine --volume-id 123456\n"
             "  python manage.py test_comicvine --cache-all-volumes\n"
+            "  python manage.py test_comicvine --force-refresh-all\n"
         )
