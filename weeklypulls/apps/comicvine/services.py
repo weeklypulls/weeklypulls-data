@@ -135,13 +135,12 @@ class ComicVineService:
             logger.info(f"Fetching first {limit} issues for volume {volume_id}")
             start_time = time.time()
             
-            # Get issues for the volume using Simyan's list_issues method
-            # Filter by volume and sort by issue_number to get chronological order
+                        # Get issues for the volume using Simyan's list_issues method
+            # Filter by volume and sort by issue number to get chronological order
             issues = self.cv.list_issues(
                 params={
                     'filter': f'volume:{volume_id}',
-                    'sort': 'issue_number:asc',
-                    'field_list': 'id,issue_number,name,date_added'
+                    'sort': 'store_date:asc'  # Use store_date instead of issue_number
                 },
                 max_results=limit
             )
@@ -154,9 +153,10 @@ class ComicVineService:
             for issue in issues:
                 issue_list.append({
                     'id': issue.id,
-                    'issue_number': issue.issue_number,
-                    'name': issue.name,
-                    'date_added': issue.date_added
+                    'number': getattr(issue, 'number', None),  # Use 'number' attribute
+                    'name': getattr(issue, 'name', None),
+                    'date_added': getattr(issue, 'date_added', None),
+                    'store_date': getattr(issue, 'store_date', None),
                 })
             
             return issue_list
