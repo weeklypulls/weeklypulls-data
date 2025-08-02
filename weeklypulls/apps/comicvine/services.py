@@ -135,15 +135,15 @@ class ComicVineService:
             logger.info(f"Fetching first {limit} issues for volume {volume_id}")
             start_time = time.time()
             
-            # Get issues for the volume using Simyan
-            # Sort by issue_number to get chronological order
-            issues = self.cv.get_issues_for_volume(
-                volume_id, 
+            # Get issues for the volume using Simyan's list_issues method
+            # Filter by volume and sort by issue_number to get chronological order
+            issues = self.cv.list_issues(
                 params={
-                    'limit': limit,
+                    'filter': f'volume:{volume_id}',
                     'sort': 'issue_number:asc',
                     'field_list': 'id,issue_number,name,date_added'
-                }
+                },
+                max_results=limit
             )
             
             response_time_ms = int((time.time() - start_time) * 1000)
