@@ -115,3 +115,58 @@ class ComicVineService:
             volume.mark_api_failure()
             volume.save()
             return volume
+
+    def get_volume_issues(self, volume_id: int, limit: int = 100) -> list:
+        """
+        Get the first N issues for a volume, sorted by issue number/date
+        
+        Args:
+            volume_id: ComicVine volume ID
+            limit: Maximum number of issues to fetch
+            
+        Returns:
+            List of issue dictionaries with id, issue_number, name, date_added
+        """
+        if not self.cv:
+            logger.error("ComicVine API not configured")
+            return []
+        
+        try:
+            logger.info(f"Fetching first {limit} issues for volume {volume_id}")
+            start_time = time.time()
+            
+            # Get issues for the volume using Simyan
+            # Sort by issue_number to get chronological order
+            issues = self.cv.get_issues_for_volume(
+                volume_id, 
+                params={
+                    'limit': limit,
+                    'sort': 'issue_number:asc',
+                    'field_list': 'id,issue_number,name,date_added'
+                }
+            )
+            
+            response_time_ms = int((time.time() - start_time) * 1000)
+            logger.info(f"API SUCCESS: issues for volume/{volume_id} - {len(issues)} issues - {response_time_ms}ms")
+            
+            # Convert to simple list of dicts
+            issue_list = []
+            for issue in issues:
+                issue_list.append({
+                    'id': issue.id,
+                    'issue_number': issue.issue_number,
+                    'name': issue.name,
+                    'date_added': issue.date_added
+                })
+            
+            return issue_list
+            
+        except ServiceError as e:
+            response_time_ms = int((time.time() - start_time) * 1000)
+            logger.error(f"API ERROR: issues for volume/{volume_id} - Simyan error: {str(e)} - {response_time_ms}ms")
+            return []
+            
+        except Exception as e:
+            response_time_ms = int((time.time() - start_time) * 1000)
+            logger.error(f"API ERROR: issues for volume/{volume_id} - Unexpected error: {str(e)} - {response_time_ms}ms")
+            return []
