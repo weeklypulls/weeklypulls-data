@@ -27,8 +27,8 @@ class PullsAdmin(admin.ModelAdmin):
     
     def migrated_status(self, obj):
         """Show migration status"""
-        return "✓ Migrated" if obj.migrated_to_comicvine else "Not migrated"
-    migrated_status.short_description = 'Migration Status'
+        return obj.migrated_to_comicvine
+    migrated_status.short_description = 'Migrated'
     migrated_status.boolean = True  # Show as green/red icon
 
 
