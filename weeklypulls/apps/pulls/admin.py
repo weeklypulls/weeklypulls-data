@@ -3,7 +3,7 @@ from weeklypulls.apps.pulls.models import Pull, MUPull, MUPullAlert
 
 
 class PullsAdmin(admin.ModelAdmin):
-    list_display = ('series_id', 'comicvine_volume_display', 'pull_list', 'read_count', 'skipped_count')
+    list_display = ('series_id', 'comicvine_volume_display', 'pull_list', 'read_count')
     list_filter = ('pull_list',)
     search_fields = ('series_id',)
     fields = ('series_id', 'read', 'pull_list', )
@@ -24,11 +24,6 @@ class PullsAdmin(admin.ModelAdmin):
         """Show count of read issues"""
         return len(obj.read) if obj.read else 0
     read_count.short_description = 'Read'
-    
-    def skipped_count(self, obj):
-        """Show count of skipped issues"""
-        return len(obj.skipped) if obj.skipped else 0
-    skipped_count.short_description = 'Skipped'
 
 
 admin.site.register(Pull, PullsAdmin)
