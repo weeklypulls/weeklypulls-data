@@ -29,20 +29,31 @@ class Command(BaseCommand):
             type=int,
             help='Process only a specific series ID',
         )
+        parser.add_argument(
+            '--force',
+            action='store_true',
+            help='Force conversion even if series appears already converted',
+        )
 
     def handle(self, *args, **options):
         dry_run = options['dry_run']
         limit = options['limit']
         specific_series = options['series_id']
+        force = options['force']
         
         if dry_run:
             self.stdout.write(self.style.WARNING('DRY RUN MODE - No changes will be made'))
+        if force:
+            self.stdout.write(self.style.WARNING('FORCE MODE - Will re-convert already converted series'))
         
         cv_service = ComicVineService()
         processed_count = 0
         
-        # Get all pulls with read issues
-        pulls_query = Pull.objects.filter(read__len__gt=0)
+        # Get all pulls with read issues that haven't been migrated yet
+        if force:
+            pulls_query = Pull.objects.filter(read__len__gt=0)
+        else:
+            pulls_query = Pull.objects.filter(read__len__gt=0, migrated_to_comicvine=False)
         
         if specific_series:
             pulls_query = pulls_query.filter(series_id=specific_series)
@@ -54,7 +65,7 @@ class Command(BaseCommand):
         self.stdout.write(f"Found {len(series_with_reads)} series with read issues")
         
         for series_id in series_with_reads[:limit]:
-            if self.process_series(cv_service, series_id, dry_run):
+            if self.process_series(cv_service, series_id, dry_run, force):
                 processed_count += 1
             
             # Break early if we hit API limits
@@ -65,11 +76,14 @@ class Command(BaseCommand):
             self.style.SUCCESS(f'Processed {processed_count} series')
         )
 
-    def process_series(self, cv_service, series_id, dry_run):
+    def process_series(self, cv_service, series_id, dry_run, force=False):
         """Process a single series"""
         try:
-            # Get all pulls for this series
-            pulls = Pull.objects.filter(series_id=series_id, read__len__gt=0)
+            # Get all pulls for this series that need migration
+            if force:
+                pulls = Pull.objects.filter(series_id=series_id, read__len__gt=0)
+            else:
+                pulls = Pull.objects.filter(series_id=series_id, read__len__gt=0, migrated_to_comicvine=False)
             
             if not pulls:
                 return False
@@ -81,10 +95,20 @@ class Command(BaseCommand):
             
             read_count = len(all_read_issues)
             
+            # Check if any pulls are already migrated (unless force is used)
+            if not force:
+                migrated_pulls = Pull.objects.filter(series_id=series_id, migrated_to_comicvine=True).count()
+                if migrated_pulls > 0:
+                    self.stdout.write(f"  ✓ Series {series_id} has {migrated_pulls} already migrated pulls, skipping remaining")
+                    return True  # Count as processed but skip
+            
             self.stdout.write(f"Series {series_id}: {read_count} unique read issues across {pulls.count()} pulls")
             
             if read_count == 0:
                 return False
+            
+            sample_issues = list(all_read_issues)[:3]
+            self.stdout.write(f"  → Converting Marvel issue IDs (sample: {sample_issues}) to ComicVine")
             
             # Get ComicVine issues for this volume
             issues = cv_service.get_volume_issues(series_id, limit=read_count)
@@ -113,13 +137,14 @@ class Command(BaseCommand):
                 with transaction.atomic():
                     for pull in pulls:
                         pull.read = comicvine_issue_ids
-                        pull.save(update_fields=['read'])
+                        pull.migrated_to_comicvine = True
+                        pull.save(update_fields=['read', 'migrated_to_comicvine'])
                 
                 self.stdout.write(
                     self.style.SUCCESS(f"  Updated {pulls.count()} pulls for series {series_id}")
                 )
             else:
-                self.stdout.write(f"  Would update {pulls.count()} pulls (DRY RUN)")
+                self.stdout.write(f"  Would update {pulls.count()} pulls and mark as migrated (DRY RUN)")
             
             return True
             

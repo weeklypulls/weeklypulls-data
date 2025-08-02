@@ -3,10 +3,10 @@ from weeklypulls.apps.pulls.models import Pull, MUPull, MUPullAlert
 
 
 class PullsAdmin(admin.ModelAdmin):
-    list_display = ('series_id', 'comicvine_volume_display', 'pull_list', 'read_count')
-    list_filter = ('pull_list',)
+    list_display = ('series_id', 'comicvine_volume_display', 'pull_list', 'read_count', 'migrated_status')
+    list_filter = ('pull_list', 'migrated_to_comicvine')
     search_fields = ('series_id',)
-    fields = ('series_id', 'read', 'pull_list', )
+    fields = ('series_id', 'read', 'pull_list', 'migrated_to_comicvine')
     ordering = ('series_id', )
     
     def get_queryset(self, request):
@@ -24,6 +24,12 @@ class PullsAdmin(admin.ModelAdmin):
         """Show count of read issues"""
         return len(obj.read) if obj.read else 0
     read_count.short_description = 'Read'
+    
+    def migrated_status(self, obj):
+        """Show migration status"""
+        return "✓ Migrated" if obj.migrated_to_comicvine else "Not migrated"
+    migrated_status.short_description = 'Migration Status'
+    migrated_status.boolean = True  # Show as green/red icon
 
 
 admin.site.register(Pull, PullsAdmin)
