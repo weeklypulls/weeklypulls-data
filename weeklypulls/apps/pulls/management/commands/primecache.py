@@ -229,7 +229,10 @@ class Command(BaseCommand):
         for volume in recent_volumes:
             if len(volumes_without_issues) >= max_volumes:
                 break
-            if not ComicVineIssue.objects.filter(volume=volume).exists():
+            # Check if volume has no issues OR has fewer than 50 (indicating incomplete fetch)
+            issue_count = ComicVineIssue.objects.filter(volume=volume).count()
+            if issue_count == 0 or (issue_count % 50 == 0 and issue_count > 0):
+                # Either no issues, or a multiple of 50 (might be incomplete)
                 volumes_without_issues.append(volume)
         
         # Priority 2: Fill remaining spots with older series if needed
@@ -242,7 +245,10 @@ class Command(BaseCommand):
             for volume in older_volumes:
                 if len(volumes_without_issues) >= max_volumes:
                     break
-                if not ComicVineIssue.objects.filter(volume=volume).exists():
+                # Check if volume has no issues OR has fewer than 50 (indicating incomplete fetch)
+                issue_count = ComicVineIssue.objects.filter(volume=volume).count()
+                if issue_count == 0 or (issue_count % 50 == 0 and issue_count > 0):
+                    # Either no issues, or a multiple of 50 (might be incomplete)
                     volumes_without_issues.append(volume)
         
         return volumes_without_issues

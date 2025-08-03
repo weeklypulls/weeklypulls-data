@@ -118,7 +118,7 @@ class ComicVineService:
 
     def get_volume_issues(self, volume_id: int, limit: int = 100) -> list:
         """
-        Get the first N issues for a volume, sorted by issue number/date
+        Get issues for a volume, sorted by issue number/date, continuing from where we left off.
         Also saves the issues to the database.
         
         Args:
@@ -141,7 +141,10 @@ class ComicVineService:
                 logger.error(f"ComicVineVolume {volume_id} not found in database")
                 return []
 
-            logger.info(f"Fetching first {limit} issues for volume {volume_id}")
+            # Check how many issues we already have to determine offset
+            existing_count = ComicVineIssue.objects.filter(volume=volume).count()
+            
+            logger.info(f"Fetching issues for volume {volume_id} (already have {existing_count}, getting next {limit})")
             start_time = time.time()
             
             # Get issues for the volume using Simyan's list_issues method
@@ -151,7 +154,8 @@ class ComicVineService:
                     'filter': f'volume:{volume_id}',
                     'sort': 'store_date:asc'  # Use store_date instead of issue_number
                 },
-                max_results=limit
+                max_results=limit,
+                offset=existing_count  # Start from where we left off
             )
             
             response_time_ms = int((time.time() - start_time) * 1000)
@@ -234,7 +238,7 @@ class ComicVineService:
                     'store_date': getattr(issue, 'store_date', None),
                 })
             
-            logger.info(f"Saved {len(issues)} issues for volume {volume_id}: {created_count} created, {updated_count} updated")
+            logger.info(f"Saved {len(issues)} issues for volume {volume_id}: {created_count} created, {updated_count} updated (total: {existing_count + len(issues)})")
             return issue_list
             
         except ServiceError as e:
