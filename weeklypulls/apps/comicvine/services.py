@@ -198,6 +198,9 @@ class ComicVineService:
                         pass
                 
                 # Create or update ComicVineIssue record
+                from django.utils import timezone
+                cache_expiry = timezone.now() + timedelta(days=30)  # Issues don't change often
+                
                 issue_data = {
                     'name': getattr(issue, 'name', None),
                     'number': getattr(issue, 'number', None),
@@ -209,6 +212,7 @@ class ComicVineService:
                     'date_last_updated': date_last_updated,
                     'api_url': getattr(issue, 'api_detail_url', None),
                     'site_url': getattr(issue, 'site_detail_url', None),
+                    'cache_expires': cache_expiry,
                 }
                 
                 comic_issue, created = ComicVineIssue.objects.update_or_create(
