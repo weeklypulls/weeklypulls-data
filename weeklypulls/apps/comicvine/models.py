@@ -42,6 +42,7 @@ class ComicVineVolume(ComicVineCacheModel):
     cv_id = models.IntegerField(unique=True, primary_key=True)
     name = models.CharField(max_length=500)
     start_year = models.IntegerField(null=True, blank=True)
+    count_of_issues = models.IntegerField(default=0)
     
     class Meta:
         db_table = 'comicvine_volumes'

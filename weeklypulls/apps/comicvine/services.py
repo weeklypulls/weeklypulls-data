@@ -83,6 +83,7 @@ class ComicVineService:
             
             volume.name = cv_volume.name or f"Volume {volume_id}"
             volume.start_year = cv_volume.start_year
+            volume.count_of_issues = cv_volume.count_of_issues or 0
             volume.cache_expires = timezone.now() + timedelta(hours=self.cache_expire_hours)
             
             # Reset failure status on successful fetch
@@ -116,14 +117,13 @@ class ComicVineService:
             volume.save()
             return volume
 
-    def get_volume_issues(self, volume_id: int, limit: int = 100) -> list:
+    def get_volume_issues(self, volume_id: int) -> list:
         """
         Get issues for a volume, sorted by issue number/date, continuing from where we left off.
         Also saves the issues to the database.
         
         Args:
             volume_id: ComicVine volume ID
-            limit: Maximum number of issues to fetch
             
         Returns:
             List of issue dictionaries with id, issue_number, name, date_added
@@ -140,23 +140,24 @@ class ComicVineService:
             except ComicVineVolume.DoesNotExist:
                 logger.error(f"ComicVineVolume {volume_id} not found in database")
                 return []
-
-            # Check how many issues we already have to determine offset
+            
+            logger.info(f"Fetching issues for volume {volume_id})")
+            start_time = time.time()
+            issues = []
+            page = 0
             existing_count = ComicVineIssue.objects.filter(volume=volume).count()
             
-            logger.info(f"Fetching issues for volume {volume_id} (already have {existing_count}, getting next {limit})")
-            start_time = time.time()
-            
-            # Get issues for the volume using Simyan's list_issues method
-            # Filter by volume and sort by issue number to get chronological order
-            issues = self.cv.list_issues(
-                params={
-                    'filter': f'volume:{volume_id}',
-                    'sort': 'store_date:asc'  # Use store_date instead of issue_number
-                },
-                max_results=limit,
-                offset=existing_count  # Start from where we left off
-            )
+            while len(issues) < volume.count_of_issues and page < 3:
+                page += 1
+                logger.info(f"Fetching issues for volume {volume_id}, page {page}")
+                page_issues = self.cv.list_issues(
+                    params={
+                        'offset': (page - 1) * 500,  # Fix offset calculation
+                        'filter': f'volume:{volume_id}',
+                        'sort': 'store_date:asc'  # Use store_date instead of issue_number
+                    },
+                )
+                issues.extend(page_issues)  # Use extend() not append()
             
             response_time_ms = int((time.time() - start_time) * 1000)
             logger.info(f"API SUCCESS: issues for volume/{volume_id} - {len(issues)} issues - {response_time_ms}ms")
@@ -238,7 +239,7 @@ class ComicVineService:
                     'store_date': getattr(issue, 'store_date', None),
                 })
             
-            logger.info(f"Saved {len(issues)} issues for volume {volume_id}: {created_count} created, {updated_count} updated (total: {existing_count + len(issues)})")
+            logger.info(f"Processed volume {volume_id}: {created_count} created, {updated_count} updated, (total now: {existing_count + created_count})")
             return issue_list
             
         except ServiceError as e:

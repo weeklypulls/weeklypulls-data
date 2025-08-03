@@ -116,8 +116,8 @@ class Command(BaseCommand):
                 requests_made += 1  # Count the request that would be made
             else:
                 try:
-                    # Fetch up to 50 issues per volume to stay within limits
-                    issues = service.get_volume_issues(volume.cv_id, limit=50)
+                    # Fetch 500 issues for the volume
+                    issues = service.get_volume_issues(volume.cv_id)
                     age_info = f" (started {volume.start_year})" if volume.start_year else ""
                     self.stdout.write(f"📚 Fetched {len(issues)} issues for {volume.name}{age_info}")
                     requests_made += 1
@@ -183,9 +183,6 @@ class Command(BaseCommand):
         very_old_cutoff = now - timedelta(days=30)
         very_old_series = Q(start_year__lt=current_year - 10) & Q(last_updated__lt=very_old_cutoff)
         
-        # Apply smart refresh logic
-        smart_query = query & (recent_series | older_series | very_old_series)
-        
         # Get recent series first (most likely to have new issues)
         recent_volumes = list(ComicVineVolume.objects.filter(
             query & recent_series
@@ -229,15 +226,14 @@ class Command(BaseCommand):
         for volume in recent_volumes:
             if len(volumes_without_issues) >= max_volumes:
                 break
-            # Check if volume has no issues OR has fewer than 50 (indicating incomplete fetch)
+
+            # Check if volume has no issues OR fewer than the records indicate
             issue_count = ComicVineIssue.objects.filter(volume=volume).count()
-            if issue_count == 0 or (issue_count % 50 == 0 and issue_count > 0):
-                # Either no issues, or a multiple of 50 (might be incomplete)
+            if issue_count == 0 or issue_count < volume.count_of_issues:
                 volumes_without_issues.append(volume)
         
         # Priority 2: Fill remaining spots with older series if needed
         if len(volumes_without_issues) < max_volumes:
-            remaining_slots = max_volumes - len(volumes_without_issues)
             older_volumes = volumes_with_pulls.filter(
                 start_year__lt=current_year - 5
             ).order_by('-start_year')  # More recent of the older ones first
