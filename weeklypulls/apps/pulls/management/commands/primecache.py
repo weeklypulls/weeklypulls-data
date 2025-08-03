@@ -102,8 +102,9 @@ class Command(BaseCommand):
                 time.sleep(0.5)
         
         # Priority 3: Fetch issues for volumes that need them
-        volumes_needing_issues = self._get_volumes_needing_issues()
-        self.stdout.write(f"Found {len(volumes_needing_issues)} volumes needing issue data (prioritizing recent series)")
+        remaining_requests = limit - requests_made
+        volumes_needing_issues = self._get_volumes_needing_issues(max_volumes=remaining_requests)
+        self.stdout.write(f"Found {len(volumes_needing_issues)} volumes needing issue data (prioritizing recent series, limited by {remaining_requests} remaining requests)")
         
         for volume in volumes_needing_issues:
             if requests_made >= limit:
@@ -200,10 +201,17 @@ class Command(BaseCommand):
         
         return recent_volumes
 
-    def _get_volumes_needing_issues(self):
+    def _get_volumes_needing_issues(self, max_volumes=None):
         """Get volumes that exist but don't have issue data cached, prioritized by activity"""
         now = timezone.now()
         current_year = now.year
+        
+        # If no max_volumes specified, use a reasonable default
+        if max_volumes is None:
+            max_volumes = 10
+        
+        # Don't go crazy - cap at a reasonable number even with high API limits
+        max_volumes = min(max_volumes, 50)
         
         # Get volumes that have pulls but no cached issues
         volumes_with_pulls = ComicVineVolume.objects.filter(
@@ -219,20 +227,20 @@ class Command(BaseCommand):
         ).order_by('-start_year')
         
         for volume in recent_volumes:
-            if len(volumes_without_issues) >= 10:  # Limit to 10 volumes per run
+            if len(volumes_without_issues) >= max_volumes:
                 break
             if not ComicVineIssue.objects.filter(volume=volume).exists():
                 volumes_without_issues.append(volume)
         
         # Priority 2: Fill remaining spots with older series if needed
-        if len(volumes_without_issues) < 10:
-            remaining_slots = 10 - len(volumes_without_issues)
+        if len(volumes_without_issues) < max_volumes:
+            remaining_slots = max_volumes - len(volumes_without_issues)
             older_volumes = volumes_with_pulls.filter(
                 start_year__lt=current_year - 5
             ).order_by('-start_year')  # More recent of the older ones first
             
             for volume in older_volumes:
-                if len(volumes_without_issues) >= 10:
+                if len(volumes_without_issues) >= max_volumes:
                     break
                 if not ComicVineIssue.objects.filter(volume=volume).exists():
                     volumes_without_issues.append(volume)
