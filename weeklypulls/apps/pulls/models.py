@@ -10,7 +10,6 @@ class Pull(AbstractBaseModel):
     pull_list = models.ForeignKey(PullList, on_delete=models.CASCADE)
     series_id = models.IntegerField()
     read = ArrayField(models.IntegerField(), default=list)
-    migrated_to_comicvine = models.BooleanField(default=False)
 
     class Meta:
         verbose_name_plural = "pulls"

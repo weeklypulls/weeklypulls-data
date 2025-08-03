@@ -17,7 +17,7 @@ class PullSerializer(serializers.HyperlinkedModelSerializer):
 
     class Meta:
         model = Pull
-        fields = ('id', 'series_id', 'read', 'migrated_to_comicvine', 'pull_list_id', )
+        fields = ('id', 'series_id', 'read', 'pull_list_id', )
 
 
 class PullViewSet(viewsets.ModelViewSet):
