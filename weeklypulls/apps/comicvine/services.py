@@ -147,7 +147,8 @@ class ComicVineService:
             page = 0
             existing_count = ComicVineIssue.objects.filter(volume=volume).count()
             
-            while len(issues) < volume.count_of_issues and page < 3:
+            # Keep fetching while we need more issues and haven't hit page limit
+            while (len(issues) == 0 or (volume.count_of_issues > 0 and len(issues) < volume.count_of_issues)) and page < 3:
                 page += 1
                 logger.info(f"Fetching issues for volume {volume_id}, page {page}")
                 page_issues = self.cv.list_issues(
