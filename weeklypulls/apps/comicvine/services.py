@@ -119,6 +119,7 @@ class ComicVineService:
     def get_volume_issues(self, volume_id: int, limit: int = 100) -> list:
         """
         Get the first N issues for a volume, sorted by issue number/date
+        Also saves the issues to the database.
         
         Args:
             volume_id: ComicVine volume ID
@@ -130,12 +131,20 @@ class ComicVineService:
         if not self.cv:
             logger.error("ComicVine API not configured")
             return []
-        
+
         try:
+            # Get the ComicVineVolume instance
+            from .models import ComicVineVolume, ComicVineIssue
+            try:
+                volume = ComicVineVolume.objects.get(cv_id=volume_id)
+            except ComicVineVolume.DoesNotExist:
+                logger.error(f"ComicVineVolume {volume_id} not found in database")
+                return []
+
             logger.info(f"Fetching first {limit} issues for volume {volume_id}")
             start_time = time.time()
             
-                        # Get issues for the volume using Simyan's list_issues method
+            # Get issues for the volume using Simyan's list_issues method
             # Filter by volume and sort by issue number to get chronological order
             issues = self.cv.list_issues(
                 params={
@@ -148,17 +157,80 @@ class ComicVineService:
             response_time_ms = int((time.time() - start_time) * 1000)
             logger.info(f"API SUCCESS: issues for volume/{volume_id} - {len(issues)} issues - {response_time_ms}ms")
             
-            # Convert to simple list of dicts
+            # Convert to simple list of dicts AND save to database
             issue_list = []
+            created_count = 0
+            updated_count = 0
+            
             for issue in issues:
+                # Parse dates
+                store_date = None
+                cover_date = None
+                date_added = None
+                date_last_updated = None
+                
+                if hasattr(issue, 'store_date') and issue.store_date:
+                    try:
+                        from dateutil.parser import parse
+                        store_date = parse(issue.store_date).date()
+                    except:
+                        pass
+                        
+                if hasattr(issue, 'cover_date') and issue.cover_date:
+                    try:
+                        from dateutil.parser import parse
+                        cover_date = parse(issue.cover_date).date()
+                    except:
+                        pass
+                        
+                if hasattr(issue, 'date_added') and issue.date_added:
+                    try:
+                        from dateutil.parser import parse
+                        date_added = parse(issue.date_added)
+                    except:
+                        pass
+                        
+                if hasattr(issue, 'date_last_updated') and issue.date_last_updated:
+                    try:
+                        from dateutil.parser import parse
+                        date_last_updated = parse(issue.date_last_updated)
+                    except:
+                        pass
+                
+                # Create or update ComicVineIssue record
+                issue_data = {
+                    'name': getattr(issue, 'name', None),
+                    'number': getattr(issue, 'number', None),
+                    'volume': volume,
+                    'store_date': store_date,
+                    'cover_date': cover_date,
+                    'description': getattr(issue, 'description', None),
+                    'date_added': date_added,
+                    'date_last_updated': date_last_updated,
+                    'api_url': getattr(issue, 'api_detail_url', None),
+                    'site_url': getattr(issue, 'site_detail_url', None),
+                }
+                
+                comic_issue, created = ComicVineIssue.objects.update_or_create(
+                    cv_id=issue.id,
+                    defaults=issue_data
+                )
+                
+                if created:
+                    created_count += 1
+                else:
+                    updated_count += 1
+                
+                # Add to return list
                 issue_list.append({
                     'id': issue.id,
-                    'number': getattr(issue, 'number', None),  # Use 'number' attribute
+                    'number': getattr(issue, 'number', None),
                     'name': getattr(issue, 'name', None),
                     'date_added': getattr(issue, 'date_added', None),
                     'store_date': getattr(issue, 'store_date', None),
                 })
             
+            logger.info(f"Saved {len(issues)} issues for volume {volume_id}: {created_count} created, {updated_count} updated")
             return issue_list
             
         except ServiceError as e:
