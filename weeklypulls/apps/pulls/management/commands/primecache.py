@@ -56,6 +56,7 @@ class Command(BaseCommand):
                 
             if dry_run:
                 self.stdout.write(f"Would fetch volume {volume_id}")
+                requests_made += 1  # Count the request that would be made
             else:
                 try:
                     volume = service.get_volume(volume_id, force_refresh=force_volumes)
@@ -83,6 +84,7 @@ class Command(BaseCommand):
             if dry_run:
                 age_info = f" (started {volume.start_year})" if volume.start_year else ""
                 self.stdout.write(f"Would refresh volume {volume.cv_id}: {volume.name}{age_info}")
+                requests_made += 1  # Count the request that would be made
             else:
                 try:
                     refreshed = service.get_volume(volume.cv_id, force_refresh=True)
@@ -110,6 +112,7 @@ class Command(BaseCommand):
             if dry_run:
                 age_info = f" (started {volume.start_year})" if volume.start_year else ""
                 self.stdout.write(f"Would fetch issues for volume {volume.cv_id}: {volume.name}{age_info}")
+                requests_made += 1  # Count the request that would be made
             else:
                 try:
                     # Fetch up to 50 issues per volume to stay within limits
