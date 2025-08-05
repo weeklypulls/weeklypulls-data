@@ -168,40 +168,54 @@ class ComicVineService:
             created_count = 0
             updated_count = 0
             
+            # Debug: Log first issue structure if we have any
+            if issues:
+                first_issue = issues[0]
+                logger.info(f"Sample issue object attributes: {[attr for attr in dir(first_issue) if not attr.startswith('_')]}")
+                logger.info(f"Sample store_date value: {getattr(first_issue, 'store_date', 'NOT_FOUND')}")
+                logger.info(f"Sample cover_date value: {getattr(first_issue, 'cover_date', 'NOT_FOUND')}")
+            
             for issue in issues:
-                # Parse dates
+                # Parse dates with better error handling
                 store_date = None
                 cover_date = None
                 date_added = None
                 date_last_updated = None
                 
+                # Parse store_date
                 if hasattr(issue, 'store_date') and issue.store_date:
                     try:
                         from dateutil.parser import parse
                         store_date = parse(issue.store_date).date()
-                    except:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"Failed to parse store_date '{issue.store_date}' for issue {issue.id}: {e}")
                         
+                # Parse cover_date
                 if hasattr(issue, 'cover_date') and issue.cover_date:
                     try:
                         from dateutil.parser import parse
                         cover_date = parse(issue.cover_date).date()
-                    except:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"Failed to parse cover_date '{issue.cover_date}' for issue {issue.id}: {e}")
                         
+                # Parse date_added
                 if hasattr(issue, 'date_added') and issue.date_added:
                     try:
                         from dateutil.parser import parse
                         date_added = parse(issue.date_added)
-                    except:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"Failed to parse date_added '{issue.date_added}' for issue {issue.id}: {e}")
                         
+                # Parse date_last_updated
                 if hasattr(issue, 'date_last_updated') and issue.date_last_updated:
                     try:
                         from dateutil.parser import parse
                         date_last_updated = parse(issue.date_last_updated)
-                    except:
-                        pass
+                    except Exception as e:
+                        logger.warning(f"Failed to parse date_last_updated '{issue.date_last_updated}' for issue {issue.id}: {e}")
+                
+                # Debug logging to see what we're getting from the API
+                logger.debug(f"Issue {issue.id} dates - store: {getattr(issue, 'store_date', 'None')}, cover: {getattr(issue, 'cover_date', 'None')}")
                 
                 # Create or update ComicVineIssue record
                 from django.utils import timezone
