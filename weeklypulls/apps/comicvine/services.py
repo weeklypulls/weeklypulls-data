@@ -1,5 +1,6 @@
 import time
 import logging
+import datetime
 from datetime import timedelta
 from typing import Optional
 from django.conf import settings
@@ -185,34 +186,50 @@ class ComicVineService:
                 # Parse store_date
                 if hasattr(issue, 'store_date') and issue.store_date:
                     try:
-                        from dateutil.parser import parse
-                        store_date = parse(issue.store_date).date()
+                        if isinstance(issue.store_date, datetime.date):
+                            store_date = issue.store_date
+                        elif isinstance(issue.store_date, datetime.datetime):
+                            store_date = issue.store_date.date()
+                        else:
+                            from dateutil.parser import parse
+                            store_date = parse(issue.store_date).date()
                     except Exception as e:
-                        logger.warning(f"Failed to parse store_date '{issue.store_date}' for issue {issue.id}: {e}")
+                        print(f"Failed to parse store_date '{issue.store_date}' for issue {issue.id}: {e}")
                         
                 # Parse cover_date
                 if hasattr(issue, 'cover_date') and issue.cover_date:
                     try:
-                        from dateutil.parser import parse
-                        cover_date = parse(issue.cover_date).date()
+                        if isinstance(issue.cover_date, datetime.date):
+                            cover_date = issue.cover_date
+                        elif isinstance(issue.cover_date, datetime.datetime):
+                            cover_date = issue.cover_date.date()
+                        else:
+                            from dateutil.parser import parse
+                            cover_date = parse(issue.cover_date).date()
                     except Exception as e:
-                        logger.warning(f"Failed to parse cover_date '{issue.cover_date}' for issue {issue.id}: {e}")
+                        print(f"Failed to parse cover_date '{issue.cover_date}' for issue {issue.id}: {e}")
                         
                 # Parse date_added
                 if hasattr(issue, 'date_added') and issue.date_added:
                     try:
-                        from dateutil.parser import parse
-                        date_added = parse(issue.date_added)
+                        if isinstance(issue.date_added, (datetime.date, datetime.datetime)):
+                            date_added = issue.date_added
+                        else:
+                            from dateutil.parser import parse
+                            date_added = parse(issue.date_added)
                     except Exception as e:
-                        logger.warning(f"Failed to parse date_added '{issue.date_added}' for issue {issue.id}: {e}")
+                        print(f"Failed to parse date_added '{issue.date_added}' for issue {issue.id}: {e}")
                         
                 # Parse date_last_updated
                 if hasattr(issue, 'date_last_updated') and issue.date_last_updated:
                     try:
-                        from dateutil.parser import parse
-                        date_last_updated = parse(issue.date_last_updated)
+                        if isinstance(issue.date_last_updated, (datetime.date, datetime.datetime)):
+                            date_last_updated = issue.date_last_updated
+                        else:
+                            from dateutil.parser import parse
+                            date_last_updated = parse(issue.date_last_updated)
                     except Exception as e:
-                        logger.warning(f"Failed to parse date_last_updated '{issue.date_last_updated}' for issue {issue.id}: {e}")
+                        print(f"Failed to parse date_last_updated '{issue.date_last_updated}' for issue {issue.id}: {e}")
                 
                 # Debug logging to see what we're getting from the API
                 logger.debug(f"Issue {issue.id} dates - store: {getattr(issue, 'store_date', 'None')}, cover: {getattr(issue, 'cover_date', 'None')}")
