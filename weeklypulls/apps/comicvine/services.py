@@ -172,21 +172,21 @@ class ComicVineService:
             # Debug: Log first issue structure if we have any
             if issues:
                 first_issue = issues[0]
-                logger.info(f"Sample issue object attributes: {[attr for attr in dir(first_issue) if not attr.startswith('_')]}")
-                logger.info(f"Sample store_date value: {getattr(first_issue, 'store_date', 'NOT_FOUND')}")
-                logger.info(f"Sample cover_date value: {getattr(first_issue, 'cover_date', 'NOT_FOUND')}")
+                print(f"Sample issue object attributes: {[attr for attr in dir(first_issue) if not attr.startswith('_')]}")
+                print(f"Sample store_date value: {getattr(first_issue, 'store_date', 'NOT_FOUND')}")
+                print(f"Sample cover_date value: {getattr(first_issue, 'cover_date', 'NOT_FOUND')}")
                 
                 # Debug URL fields specifically
                 url_attrs = [attr for attr in dir(first_issue) if 'url' in attr.lower()]
-                logger.info(f"URL-related attributes: {url_attrs}")
+                print(f"URL-related attributes: {url_attrs}")
                 for attr in url_attrs:
-                    logger.info(f"  {attr}: {getattr(first_issue, attr, 'NOT_FOUND')}")
+                    print(f"  {attr}: {getattr(first_issue, attr, 'NOT_FOUND')}")
                 
                 # Also check for 'site' related attributes
                 site_attrs = [attr for attr in dir(first_issue) if 'site' in attr.lower()]
-                logger.info(f"Site-related attributes: {site_attrs}")
+                print(f"Site-related attributes: {site_attrs}")
                 for attr in site_attrs:
-                    logger.info(f"  {attr}: {getattr(first_issue, attr, 'NOT_FOUND')}")
+                    print(f"  {attr}: {getattr(first_issue, attr, 'NOT_FOUND')}")
             
             for issue in issues:
                 # Parse dates with better error handling
