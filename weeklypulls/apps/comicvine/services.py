@@ -169,25 +169,6 @@ class ComicVineService:
             created_count = 0
             updated_count = 0
             
-            # Debug: Log first issue structure if we have any
-            if issues:
-                first_issue = issues[0]
-                print(f"Sample issue object attributes: {[attr for attr in dir(first_issue) if not attr.startswith('_')]}")
-                print(f"Sample store_date value: {getattr(first_issue, 'store_date', 'NOT_FOUND')}")
-                print(f"Sample cover_date value: {getattr(first_issue, 'cover_date', 'NOT_FOUND')}")
-                
-                # Debug URL fields specifically
-                url_attrs = [attr for attr in dir(first_issue) if 'url' in attr.lower()]
-                print(f"URL-related attributes: {url_attrs}")
-                for attr in url_attrs:
-                    print(f"  {attr}: {getattr(first_issue, attr, 'NOT_FOUND')}")
-                
-                # Also check for 'site' related attributes
-                site_attrs = [attr for attr in dir(first_issue) if 'site' in attr.lower()]
-                print(f"Site-related attributes: {site_attrs}")
-                for attr in site_attrs:
-                    print(f"  {attr}: {getattr(first_issue, attr, 'NOT_FOUND')}")
-            
             for issue in issues:
                 # Parse dates with better error handling
                 store_date = None
@@ -259,8 +240,8 @@ class ComicVineService:
                     'description': getattr(issue, 'description', None),
                     'date_added': date_added,
                     'date_last_updated': date_last_updated,
-                    'api_url': getattr(issue, 'api_detail_url', None),
-                    'site_url': getattr(issue, 'site_detail_url', None),
+                    'api_url': getattr(issue, 'api_url', None),
+                    'site_url': getattr(issue, 'site_url', None),
                     'cache_expires': cache_expiry,
                 }
                 
