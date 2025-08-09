@@ -214,6 +214,12 @@ class ComicVineService:
                             date_added = parse(raw)
                     except Exception as e:
                         print(f"Failed to parse date_added '{raw}' for issue {issue.id}: {e}")
+                # Ensure timezone-aware UTC
+                if isinstance(date_added, datetime.datetime):
+                    if timezone.is_naive(date_added):
+                        date_added = timezone.make_aware(date_added, timezone.utc)
+                    else:
+                        date_added = date_added.astimezone(timezone.utc)
                         
                 # Parse date_last_updated
                 raw = issue.date_last_updated
@@ -225,6 +231,12 @@ class ComicVineService:
                             date_last_updated = parse(raw)
                     except Exception as e:
                         print(f"Failed to parse date_last_updated '{raw}' for issue {issue.id}: {e}")
+                # Ensure timezone-aware UTC
+                if isinstance(date_last_updated, datetime.datetime):
+                    if timezone.is_naive(date_last_updated):
+                        date_last_updated = timezone.make_aware(date_last_updated, timezone.utc)
+                    else:
+                        date_last_updated = date_last_updated.astimezone(timezone.utc)
                 
                 # Image URLs (explicit fields)
                 img = issue.image
