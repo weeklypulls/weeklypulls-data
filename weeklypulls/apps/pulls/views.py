@@ -28,13 +28,21 @@ class UnreadIssueSerializer(serializers.ModelSerializer):
     volume_name = serializers.CharField(source='volume.name', read_only=True)
     volume_start_year = serializers.IntegerField(source='volume.start_year', read_only=True)
     volume_id = serializers.IntegerField(source='volume.cv_id', read_only=True)
+    # New: include pull_id for the client to patch directly
+    pull_id = serializers.SerializerMethodField()
+
+    def get_pull_id(self, obj):
+        mapping = self.context.get('series_to_pull', {}) or {}
+        # obj.volume.cv_id is the series identifier used by Pull.series_id
+        series_id = getattr(getattr(obj, 'volume', None), 'cv_id', None)
+        return mapping.get(series_id)
     
     class Meta:
         model = ComicVineIssue
         fields = (
             'cv_id', 'name', 'number', 'store_date', 'cover_date',
             'volume_id', 'volume_name', 'volume_start_year',
-            'description', 'image_medium_url', 'site_url'
+            'description', 'image_medium_url', 'site_url', 'pull_id'
         )
 
 
@@ -56,6 +64,22 @@ class PullViewSet(viewsets.ModelViewSet):
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
+    @action(detail=True, methods=['post'])
+    def mark_read(self, request, pk=None):
+        """Mark a single issue id as read for this pull."""
+        pull = self.get_object()
+        try:
+            issue_id = int(request.data.get('issue_id'))
+        except (TypeError, ValueError):
+            return Response({'detail': 'issue_id required'}, status=status.HTTP_400_BAD_REQUEST)
+        current = set(pull.read or [])
+        if issue_id not in current:
+            current.add(issue_id)
+            pull.read = list(current)
+            pull.save(update_fields=['read'])
+        serializer = self.get_serializer(pull)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
     @action(detail=False, methods=['get'])
     def unread_issues(self, request):
         """
@@ -70,7 +94,7 @@ class PullViewSet(viewsets.ModelViewSet):
         user_pulls = Pull.objects.filter(
             pull_list__owner=request.user
         ).select_related('pull_list').only(
-            'series_id', 'read', 'pull_list__owner'
+            'id', 'series_id', 'read', 'pull_list__owner'
         )
         
         if not user_pulls.exists():
@@ -78,8 +102,11 @@ class PullViewSet(viewsets.ModelViewSet):
         
         # Build query for unread issues more efficiently
         unread_conditions = Q()
+        series_to_pull = {}
         
         for pull in user_pulls:
+            # Map series_id to pull.id for serializer context
+            series_to_pull[pull.series_id] = pull.id
             # For each pull, find issues in that series that aren't read
             series_condition = Q(volume__cv_id=pull.series_id)
             
@@ -99,7 +126,7 @@ class PullViewSet(viewsets.ModelViewSet):
             'volume__cv_id', 'volume__name', 'volume__start_year'
         ).order_by('-store_date', '-cover_date')
         
-        serializer = UnreadIssueSerializer(unread_issues, many=True)
+        serializer = UnreadIssueSerializer(unread_issues, many=True, context={'series_to_pull': series_to_pull})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
