@@ -217,9 +217,9 @@ class ComicVineService:
                 # Ensure timezone-aware UTC
                 if isinstance(date_added, datetime.datetime):
                     if timezone.is_naive(date_added):
-                        date_added = timezone.make_aware(date_added, timezone.utc)
+                        date_added = timezone.make_aware(date_added, datetime.timezone.utc)
                     else:
-                        date_added = date_added.astimezone(timezone.utc)
+                        date_added = date_added.astimezone(datetime.timezone.utc)
                         
                 # Parse date_last_updated
                 raw = issue.date_last_updated
@@ -234,9 +234,9 @@ class ComicVineService:
                 # Ensure timezone-aware UTC
                 if isinstance(date_last_updated, datetime.datetime):
                     if timezone.is_naive(date_last_updated):
-                        date_last_updated = timezone.make_aware(date_last_updated, timezone.utc)
+                        date_last_updated = timezone.make_aware(date_last_updated, datetime.timezone.utc)
                     else:
-                        date_last_updated = date_last_updated.astimezone(timezone.utc)
+                        date_last_updated = date_last_updated.astimezone(datetime.timezone.utc)
                 
                 # Image URLs (explicit fields)
                 img = issue.image
