@@ -13,4 +13,5 @@ whitenoise>=6.5.0
 django-cache-url>=3.4.4
 simyan>=1.5.1
 requests>=2.31.0
+python-dateutil>=2.9.0.post0
 safety

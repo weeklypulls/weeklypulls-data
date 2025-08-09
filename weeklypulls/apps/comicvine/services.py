@@ -5,6 +5,7 @@ from datetime import timedelta
 from typing import Optional
 from django.conf import settings
 from django.utils import timezone
+from dateutil.parser import parse
 
 from simyan.comicvine import Comicvine
 from simyan.sqlite_cache import SQLiteCache
@@ -82,9 +83,10 @@ class ComicVineService:
             if not volume:
                 volume = ComicVineVolume(cv_id=volume_id)
             
+            # Explicit attribute access (fail fast if Simyan API changes)
             volume.name = cv_volume.name or f"Volume {volume_id}"
             volume.start_year = cv_volume.start_year
-            volume.count_of_issues = cv_volume.count_of_issues or 0
+            volume.count_of_issues = cv_volume.issue_count or 0  # Simyan uses issue_count
             volume.cache_expires = timezone.now() + timedelta(hours=self.cache_expire_hours)
             
             # Reset failure status on successful fetch
@@ -177,113 +179,94 @@ class ComicVineService:
                 date_last_updated = None
                 
                 # Parse store_date
-                if hasattr(issue, 'store_date') and issue.store_date:
+                raw = issue.store_date
+                if raw:
                     try:
-                        if isinstance(issue.store_date, datetime.date):
-                            store_date = issue.store_date
-                        elif isinstance(issue.store_date, datetime.datetime):
-                            store_date = issue.store_date.date()
+                        if isinstance(raw, datetime.date) and not isinstance(raw, datetime.datetime):
+                            store_date = raw
+                        elif isinstance(raw, datetime.datetime):
+                            store_date = raw.date()
                         else:
-                            from dateutil.parser import parse
-                            store_date = parse(issue.store_date).date()
+                            store_date = parse(raw).date()
                     except Exception as e:
-                        print(f"Failed to parse store_date '{issue.store_date}' for issue {issue.id}: {e}")
+                        print(f"Failed to parse store_date '{raw}' for issue {issue.id}: {e}")
                         
                 # Parse cover_date
-                if hasattr(issue, 'cover_date') and issue.cover_date:
+                raw = issue.cover_date
+                if raw:
                     try:
-                        if isinstance(issue.cover_date, datetime.date):
-                            cover_date = issue.cover_date
-                        elif isinstance(issue.cover_date, datetime.datetime):
-                            cover_date = issue.cover_date.date()
+                        if isinstance(raw, datetime.date) and not isinstance(raw, datetime.datetime):
+                            cover_date = raw
+                        elif isinstance(raw, datetime.datetime):
+                            cover_date = raw.date()
                         else:
-                            from dateutil.parser import parse
-                            cover_date = parse(issue.cover_date).date()
+                            cover_date = parse(raw).date()
                     except Exception as e:
-                        print(f"Failed to parse cover_date '{issue.cover_date}' for issue {issue.id}: {e}")
+                        print(f"Failed to parse cover_date '{raw}' for issue {issue.id}: {e}")
                         
                 # Parse date_added
-                if hasattr(issue, 'date_added') and issue.date_added:
+                raw = issue.date_added
+                if raw:
                     try:
-                        if isinstance(issue.date_added, (datetime.date, datetime.datetime)):
-                            date_added = issue.date_added
+                        if isinstance(raw, (datetime.date, datetime.datetime)):
+                            date_added = raw
                         else:
-                            from dateutil.parser import parse
-                            date_added = parse(issue.date_added)
+                            date_added = parse(raw)
                     except Exception as e:
-                        print(f"Failed to parse date_added '{issue.date_added}' for issue {issue.id}: {e}")
+                        print(f"Failed to parse date_added '{raw}' for issue {issue.id}: {e}")
                         
                 # Parse date_last_updated
-                if hasattr(issue, 'date_last_updated') and issue.date_last_updated:
+                raw = issue.date_last_updated
+                if raw:
                     try:
-                        if isinstance(issue.date_last_updated, (datetime.date, datetime.datetime)):
-                            date_last_updated = issue.date_last_updated
+                        if isinstance(raw, (datetime.date, datetime.datetime)):
+                            date_last_updated = raw
                         else:
-                            from dateutil.parser import parse
-                            date_last_updated = parse(issue.date_last_updated)
+                            date_last_updated = parse(raw)
                     except Exception as e:
-                        print(f"Failed to parse date_last_updated '{issue.date_last_updated}' for issue {issue.id}: {e}")
+                        print(f"Failed to parse date_last_updated '{raw}' for issue {issue.id}: {e}")
                 
-                # Debug logging to see what we're getting from the API
-                logger.debug(f"Issue {issue.id} dates - store: {getattr(issue, 'store_date', 'None')}, cover: {getattr(issue, 'cover_date', 'None')}")
-
-                # Extract image URLs with robust fallbacks
-                def _get_image_attr(img, *names):
-                    if not img:
-                        return None
-                    for name in names:
-                        try:
-                            if isinstance(img, dict) and img.get(name):
-                                return img.get(name)
-                            val = getattr(img, name, None)
-                            if val:
-                                return val
-                        except Exception:
-                            continue
-                    return None
-
-                image_payload = getattr(issue, 'image', None)
-
-                icon_url = _get_image_attr(image_payload, 'icon_url')
-                thumb_url = _get_image_attr(image_payload, 'thumb_url', 'thumbnail_url')
-                tiny_url = _get_image_attr(image_payload, 'tiny_url')
-                small_url = _get_image_attr(image_payload, 'small_url')
-                medium_url = _get_image_attr(
-                    image_payload,
-                    # Prefer medium, then super/screen/small/original/thumb
-                    'medium_url', 'super_url', 'screen_url', 'small_url', 'original_url', 'thumb_url', 'tiny_url', 'icon_url'
+                # Image URLs (explicit fields)
+                img = issue.image
+                icon_url = img.icon_url
+                thumb_url = img.thumb_url
+                tiny_url = img.tiny_url
+                small_url = img.small_url
+                # Prefer medium, then super/screen/small/original/thumb/tiny/icon
+                medium_url = (
+                    img.medium_url or img.super_url or img.screen_url or img.small_url
+                    or img.original_url or img.thumb_url or img.tiny_url or img.icon_url
                 )
-                screen_url = _get_image_attr(image_payload, 'screen_url')
-                super_url = _get_image_attr(image_payload, 'super_url')
-                large_screen_url = _get_image_attr(image_payload, 'large_screen_url', 'large_url')
-                original_url = _get_image_attr(image_payload, 'original_url')
+                screen_url = img.screen_url
+                super_url = img.super_url
+                large_screen_url = img.large_screen_url
+                original_url = img.original_url
 
-                # Create or update ComicVineIssue record
-                from django.utils import timezone
-                cache_expiry = timezone.now() + timedelta(days=30)  # Issues don't change often
-
+                # Create or update ComicVineIssue record (inline values, no temps)
                 issue_data = {
-                    'name': getattr(issue, 'name', None),
-                    'number': getattr(issue, 'number', None),
+                    'name': issue.name,
+                    'number': issue.number,
                     'volume': volume,
                     'store_date': store_date,
                     'cover_date': cover_date,
-                    'description': getattr(issue, 'description', None),
+                    'description': issue.description,
                     'date_added': date_added,
                     'date_last_updated': date_last_updated,
-                    'api_url': getattr(issue, 'api_url', None),
-                    'site_url': getattr(issue, 'site_url', None),
-                    'cache_expires': cache_expiry,
-                    # New image fields
-                    'image_icon_url': icon_url,
-                    'image_thumbnail_url': thumb_url,
-                    'image_tiny_url': tiny_url,
-                    'image_small_url': small_url,
-                    'image_medium_url': medium_url,
-                    'image_screen_url': screen_url,
-                    'image_super_url': super_url,
-                    'image_large_screen_url': large_screen_url,
-                    'image_original_url': original_url,
+                    'api_url': issue.api_url,
+                    'site_url': issue.site_url,
+                    'cache_expires': timezone.now() + timedelta(days=30),
+                    'image_icon_url': img.icon_url,
+                    'image_thumbnail_url': img.thumb_url,
+                    'image_tiny_url': img.tiny_url,
+                    'image_small_url': img.small_url,
+                    'image_medium_url': (
+                        img.medium_url or img.super_url or img.screen_url or img.small_url
+                        or img.original_url or img.thumb_url or img.tiny_url or img.icon_url
+                    ),
+                    'image_screen_url': img.screen_url,
+                    'image_super_url': img.super_url,
+                    'image_large_screen_url': img.large_screen_url,
+                    'image_original_url': img.original_url,
                 }
                 
                 comic_issue, created = ComicVineIssue.objects.update_or_create(
@@ -296,18 +279,18 @@ class ComicVineService:
                 else:
                     updated_count += 1
                 
-                # Add to return list
+                # Add to return list (inline values)
                 issue_list.append({
                     'id': issue.id,
-                    'number': getattr(issue, 'number', None),
-                    'name': getattr(issue, 'name', None),
-                    'date_added': getattr(issue, 'date_added', None),
-                    'store_date': getattr(issue, 'store_date', None),
+                    'number': issue.number,
+                    'name': issue.name,
+                    'date_added': date_added,
+                    'store_date': store_date,
                 })
             
             logger.info(f"Processed volume {volume_id}: {created_count} created, {updated_count} updated, (total now: {existing_count + created_count})")
             return issue_list
-            
+        
         except ServiceError as e:
             response_time_ms = int((time.time() - start_time) * 1000)
             logger.error(f"API ERROR: issues for volume/{volume_id} - Simyan error: {str(e)} - {response_time_ms}ms")
