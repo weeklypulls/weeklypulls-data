@@ -27,7 +27,8 @@ HEADERS = {"User-Agent": "weeklypulls/1.0"}
 
 ORDER = [
     "medium_url", "super_url", "original_url",
-    "screen_url", "small_url", "thumb_url", "tiny_url", "icon_url",
+    "screen_url", "small_url", "large_screen_url", "screen_large_url",
+    "thumbnail", "thumb_url", "thumbnail_url", "tiny_url", "icon_url",
 ]
 
 def pick_image_url(img: dict) -> str | None:

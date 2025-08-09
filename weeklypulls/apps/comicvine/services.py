@@ -228,19 +228,6 @@ class ComicVineService:
                 
                 # Image URLs (explicit fields)
                 img = issue.image
-                icon_url = img.icon_url
-                thumb_url = img.thumb_url
-                tiny_url = img.tiny_url
-                small_url = img.small_url
-                # Prefer medium, then super/screen/small/original/thumb/tiny/icon
-                medium_url = (
-                    img.medium_url or img.super_url or img.screen_url or img.small_url
-                    or img.original_url or img.thumb_url or img.tiny_url or img.icon_url
-                )
-                screen_url = img.screen_url
-                super_url = img.super_url
-                large_screen_url = img.large_screen_url
-                original_url = img.original_url
 
                 # Create or update ComicVineIssue record (inline values, no temps)
                 issue_data = {
@@ -256,12 +243,12 @@ class ComicVineService:
                     'site_url': issue.site_url,
                     'cache_expires': timezone.now() + timedelta(days=30),
                     'image_icon_url': img.icon_url,
-                    'image_thumbnail_url': img.thumb_url,
+                    'image_thumbnail_url': img.thumbnail,
                     'image_tiny_url': img.tiny_url,
                     'image_small_url': img.small_url,
                     'image_medium_url': (
                         img.medium_url or img.super_url or img.screen_url or img.small_url
-                        or img.original_url or img.thumb_url or img.tiny_url or img.icon_url
+                        or img.original_url or img.thumbnail or img.tiny_url or img.icon_url
                     ),
                     'image_screen_url': img.screen_url,
                     'image_super_url': img.super_url,
