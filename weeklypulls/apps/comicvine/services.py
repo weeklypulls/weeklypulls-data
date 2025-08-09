@@ -226,11 +226,42 @@ class ComicVineService:
                 
                 # Debug logging to see what we're getting from the API
                 logger.debug(f"Issue {issue.id} dates - store: {getattr(issue, 'store_date', 'None')}, cover: {getattr(issue, 'cover_date', 'None')}")
-                
+
+                # Extract image URLs with robust fallbacks
+                def _get_image_attr(img, *names):
+                    if not img:
+                        return None
+                    for name in names:
+                        try:
+                            if isinstance(img, dict) and img.get(name):
+                                return img.get(name)
+                            val = getattr(img, name, None)
+                            if val:
+                                return val
+                        except Exception:
+                            continue
+                    return None
+
+                image_payload = getattr(issue, 'image', None)
+
+                icon_url = _get_image_attr(image_payload, 'icon_url')
+                thumb_url = _get_image_attr(image_payload, 'thumb_url', 'thumbnail_url')
+                tiny_url = _get_image_attr(image_payload, 'tiny_url')
+                small_url = _get_image_attr(image_payload, 'small_url')
+                medium_url = _get_image_attr(
+                    image_payload,
+                    # Prefer medium, then super/screen/small/original/thumb
+                    'medium_url', 'super_url', 'screen_url', 'small_url', 'original_url', 'thumb_url', 'tiny_url', 'icon_url'
+                )
+                screen_url = _get_image_attr(image_payload, 'screen_url')
+                super_url = _get_image_attr(image_payload, 'super_url')
+                large_screen_url = _get_image_attr(image_payload, 'large_screen_url', 'large_url')
+                original_url = _get_image_attr(image_payload, 'original_url')
+
                 # Create or update ComicVineIssue record
                 from django.utils import timezone
                 cache_expiry = timezone.now() + timedelta(days=30)  # Issues don't change often
-                
+
                 issue_data = {
                     'name': getattr(issue, 'name', None),
                     'number': getattr(issue, 'number', None),
@@ -243,6 +274,16 @@ class ComicVineService:
                     'api_url': getattr(issue, 'api_url', None),
                     'site_url': getattr(issue, 'site_url', None),
                     'cache_expires': cache_expiry,
+                    # New image fields
+                    'image_icon_url': icon_url,
+                    'image_thumbnail_url': thumb_url,
+                    'image_tiny_url': tiny_url,
+                    'image_small_url': small_url,
+                    'image_medium_url': medium_url,
+                    'image_screen_url': screen_url,
+                    'image_super_url': super_url,
+                    'image_large_screen_url': large_screen_url,
+                    'image_original_url': original_url,
                 }
                 
                 comic_issue, created = ComicVineIssue.objects.update_or_create(

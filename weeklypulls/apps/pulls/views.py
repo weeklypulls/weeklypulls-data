@@ -1,5 +1,6 @@
 from django.http import Http404
 from django.db.models import Q
+from django.db.models.functions import Coalesce
 from rest_framework.mixins import CreateModelMixin
 from rest_framework.request import clone_request
 from rest_framework.response import Response
@@ -28,12 +29,11 @@ class UnreadIssueSerializer(serializers.ModelSerializer):
     volume_name = serializers.CharField(source='volume.name', read_only=True)
     volume_start_year = serializers.IntegerField(source='volume.start_year', read_only=True)
     volume_id = serializers.IntegerField(source='volume.cv_id', read_only=True)
-    # New: include pull_id for the client to patch directly
     pull_id = serializers.SerializerMethodField()
+    image_url = serializers.CharField(read_only=True)
 
     def get_pull_id(self, obj):
         mapping = self.context.get('series_to_pull', {}) or {}
-        # obj.volume.cv_id is the series identifier used by Pull.series_id
         series_id = getattr(getattr(obj, 'volume', None), 'cv_id', None)
         return mapping.get(series_id)
     
@@ -42,7 +42,7 @@ class UnreadIssueSerializer(serializers.ModelSerializer):
         fields = (
             'cv_id', 'name', 'number', 'store_date', 'cover_date',
             'volume_id', 'volume_name', 'volume_start_year',
-            'description', 'image_medium_url', 'site_url', 'pull_id'
+            'description', 'image_medium_url', 'image_url', 'site_url', 'pull_id'
         )
 
 
@@ -122,8 +122,15 @@ class PullViewSet(viewsets.ModelViewSet):
         ).select_related('volume').only(
             # Only fetch fields we actually need
             'cv_id', 'name', 'number', 'store_date', 'cover_date',
-            'description', 'image_medium_url', 'site_url',
+            'description', 'image_medium_url', 'image_super_url', 'image_original_url',
+            'image_screen_url', 'image_small_url', 'image_thumbnail_url', 'image_tiny_url', 'image_icon_url',
+            'site_url',
             'volume__cv_id', 'volume__name', 'volume__start_year'
+        ).annotate(
+            image_url=Coalesce(
+                'image_medium_url', 'image_super_url', 'image_original_url',
+                'image_screen_url', 'image_small_url', 'image_thumbnail_url', 'image_tiny_url', 'image_icon_url'
+            )
         ).order_by('-store_date', '-cover_date')
         
         serializer = UnreadIssueSerializer(unread_issues, many=True, context={'series_to_pull': series_to_pull})
