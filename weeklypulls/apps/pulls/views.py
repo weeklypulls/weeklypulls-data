@@ -9,6 +9,7 @@ from rest_framework.decorators import action
 from weeklypulls.apps.pulls.models import Pull, MUPull
 from weeklypulls.apps.comicvine.models import ComicVineIssue, ComicVineVolume
 from rest_framework import routers, serializers, viewsets, status
+from rest_framework.permissions import IsAuthenticated
 
 from weeklypulls.apps.base.filters import IsOwnerFilterBackend
 from weeklypulls.apps.pull_lists.models import PullList
@@ -44,6 +45,19 @@ class UnreadIssueSerializer(serializers.ModelSerializer):
             'volume_id', 'volume_name', 'volume_start_year',
             'description', 'image_medium_url', 'image_url', 'site_url', 'pull_id'
         )
+
+
+# New serializers for Weeks API
+class WeekComicSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    images = serializers.ListField(child=serializers.CharField())
+    on_sale = serializers.DateField()
+    series_id = serializers.CharField()
+    title = serializers.CharField()
+
+
+class WeekSerializer(serializers.Serializer):
+    comics = WeekComicSerializer(many=True)
 
 
 class PullViewSet(viewsets.ModelViewSet):
@@ -137,6 +151,61 @@ class PullViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+class WeeksViewSet(viewsets.ViewSet):
+    """Return issues for a specific week (store_date) for the authenticated user's pulls."""
+    permission_classes = (IsAuthenticated,)
+
+    def retrieve(self, request, pk=None):
+        week_date = pk  # Expecting YYYY-MM-DD
+        # Pulls for this user
+        user_pulls = Pull.objects.filter(
+            pull_list__owner=request.user
+        ).only('series_id', 'pull_list__owner', 'read')
+
+        series_ids = list(user_pulls.values_list('series_id', flat=True))
+        if not series_ids:
+            return Response({'comics': []}, status=status.HTTP_200_OK)
+
+        # Issues for that week in user's series
+        issues = ComicVineIssue.objects.filter(
+            volume__cv_id__in=series_ids,
+            store_date=week_date
+        ).select_related('volume').only(
+            'cv_id', 'name', 'number', 'store_date',
+            'image_medium_url', 'image_super_url', 'image_original_url',
+            'image_screen_url', 'image_small_url', 'image_thumbnail_url', 'image_tiny_url', 'image_icon_url',
+            'volume__cv_id', 'volume__name'
+        ).annotate(
+            image_url=Coalesce(
+                'image_medium_url', 'image_super_url', 'image_original_url',
+                'image_screen_url', 'image_small_url', 'image_thumbnail_url', 'image_tiny_url', 'image_icon_url'
+            )
+        ).order_by('volume__name', 'number')
+
+        comics = []
+        # Build a set for quicker read lookup: series_id -> set(read_ids)
+        reads_by_series = {}
+        for p in user_pulls:
+            reads_by_series[str(p.series_id)] = set(p.read or [])
+
+        for issue in issues:
+            # Compose a title like "<Volume Name> #<number>"
+            vol_name = getattr(issue.volume, 'name', '')
+            number = getattr(issue, 'number', '')
+            title = f"{vol_name} #{number}".strip()
+            image = getattr(issue, 'image_medium_url', None) or getattr(issue, 'image_url', None)
+            images = [image] if image else []
+            comics.append({
+                'id': str(issue.cv_id),
+                'images': images,
+                'on_sale': issue.store_date,
+                'series_id': str(getattr(issue.volume, 'cv_id', '')),
+                'title': title,
+            })
+
+        serializer = WeekSerializer({'comics': comics})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 class MUPullSerializer(serializers.HyperlinkedModelSerializer):
     pull_list_id = serializers.PrimaryKeyRelatedField(
@@ -169,3 +238,5 @@ class MUPullViewSet(viewsets.ModelViewSet, CreateModelMixin):
 router = routers.DefaultRouter()
 router.register(r'pulls', PullViewSet)
 router.register(r'mupulls', MUPullViewSet)
+# Register new weeks route
+router.register(r'weeks', WeeksViewSet, basename='weeks')
