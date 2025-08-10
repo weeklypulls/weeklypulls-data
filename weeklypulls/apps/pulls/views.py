@@ -207,6 +207,59 @@ class WeeksViewSet(viewsets.ViewSet):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+class SeriesSerializer(serializers.Serializer):
+    series_id = serializers.CharField()
+    title = serializers.CharField()
+    comics = WeekComicSerializer(many=True)
+
+
+class SeriesViewSet(viewsets.ViewSet):
+    permission_classes = (IsAuthenticated,)
+
+    def retrieve(self, request, pk=None):
+        """Return ComicVine volume details and issues for a given series (volume cv_id)."""
+        try:
+            volume = ComicVineVolume.objects.get(cv_id=int(pk))
+        except (ComicVineVolume.DoesNotExist, ValueError):
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        # Fetch all issues for this volume
+        issues = ComicVineIssue.objects.filter(volume__cv_id=volume.cv_id).only(
+            'cv_id', 'name', 'number', 'store_date',
+            'image_medium_url', 'image_super_url', 'image_original_url',
+            'image_screen_url', 'image_small_url', 'image_thumbnail_url', 'image_tiny_url', 'image_icon_url'
+        ).annotate(
+            image_url=Coalesce(
+                'image_medium_url', 'image_super_url', 'image_original_url',
+                'image_screen_url', 'image_small_url', 'image_thumbnail_url', 'image_tiny_url', 'image_icon_url'
+            )
+        ).order_by('store_date', 'number')
+
+        comics = []
+        for issue in issues:
+            # Title like "#<number> <name>" or volume name + # if you prefer
+            number = getattr(issue, 'number', '')
+            name = getattr(issue, 'name', '') or ''
+            title = f"{volume.name} #{number}".strip()
+            image = getattr(issue, 'image_medium_url', None) or getattr(issue, 'image_url', None)
+            images = [image] if image else []
+            comics.append({
+                'id': str(issue.cv_id),
+                'images': images,
+                'on_sale': issue.store_date,
+                'series_id': str(volume.cv_id),
+                'title': title,
+            })
+
+        series_payload = {
+            'series_id': str(volume.cv_id),
+            'title': volume.name if not getattr(volume, 'start_year', None) else f"{volume.name}",
+            'comics': comics,
+        }
+        serializer = SeriesSerializer(series_payload)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 class MUPullSerializer(serializers.HyperlinkedModelSerializer):
     pull_list_id = serializers.PrimaryKeyRelatedField(
         source='pull_list', queryset=PullList.objects.all())
@@ -238,5 +291,6 @@ class MUPullViewSet(viewsets.ModelViewSet, CreateModelMixin):
 router = routers.DefaultRouter()
 router.register(r'pulls', PullViewSet)
 router.register(r'mupulls', MUPullViewSet)
-# Register new weeks route
+# Register new weeks and series routes
 router.register(r'weeks', WeeksViewSet, basename='weeks')
+router.register(r'series', SeriesViewSet, basename='series')
