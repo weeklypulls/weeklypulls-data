@@ -8,13 +8,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('pull_lists', '0004_auto_20180121_0337'),
+        ("pull_lists", "0004_auto_20180121_0337"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='pulllist',
-            name='mu_enabled',
+            model_name="pulllist",
+            name="mu_enabled",
             field=models.BooleanField(default=False),
         ),
     ]

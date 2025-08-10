@@ -7,25 +7,27 @@ class Migration(migrations.Migration):
 
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='ComicVineVolume',
+            name="ComicVineVolume",
             fields=[
-                ('cv_id', models.IntegerField(primary_key=True, serialize=False, unique=True)),
-                ('name', models.CharField(max_length=500)),
-                ('start_year', models.IntegerField(blank=True, null=True)),
-                ('last_updated', models.DateTimeField(auto_now=True)),
-                ('cache_expires', models.DateTimeField()),
-                ('api_fetch_failed', models.BooleanField(default=False)),
-                ('api_fetch_failure_count', models.IntegerField(default=0)),
-                ('api_last_failure', models.DateTimeField(blank=True, null=True)),
+                (
+                    "cv_id",
+                    models.IntegerField(primary_key=True, serialize=False, unique=True),
+                ),
+                ("name", models.CharField(max_length=500)),
+                ("start_year", models.IntegerField(blank=True, null=True)),
+                ("last_updated", models.DateTimeField(auto_now=True)),
+                ("cache_expires", models.DateTimeField()),
+                ("api_fetch_failed", models.BooleanField(default=False)),
+                ("api_fetch_failure_count", models.IntegerField(default=0)),
+                ("api_last_failure", models.DateTimeField(blank=True, null=True)),
             ],
             options={
-                'verbose_name_plural': 'ComicVine Volumes',
-                'db_table': 'comicvine_volumes',
+                "verbose_name_plural": "ComicVine Volumes",
+                "db_table": "comicvine_volumes",
             },
         ),
     ]

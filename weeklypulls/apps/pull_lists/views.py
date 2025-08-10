@@ -8,28 +8,32 @@ from weeklypulls.apps.pulls.models import MUPullAlert
 
 
 class PullListSerializer(serializers.HyperlinkedModelSerializer):
-    owner = serializers.ReadOnlyField(source='owner.username')
+    owner = serializers.ReadOnlyField(source="owner.username")
 
     class Meta:
         model = PullList
-        fields = ('id', 'title', 'owner', )
+        fields = (
+            "id",
+            "title",
+            "owner",
+        )
 
 
 class PullListViewSet(viewsets.ModelViewSet):
     queryset = PullList.objects.all()
     serializer_class = PullListSerializer
 
-    owner_lookup_field = 'owner'
+    owner_lookup_field = "owner"
 
-    permission_classes = (IsOwner, )
-    filter_backends = (IsOwnerFilterBackend, )
+    permission_classes = (IsOwner,)
+    filter_backends = (IsOwnerFilterBackend,)
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
 
 
 router = routers.DefaultRouter()
-router.register(r'pull-lists', PullListViewSet)
+router.register(r"pull-lists", PullListViewSet)
 
 
 def get_weekly_mu_alerts_for_list(pull_list: PullList):
@@ -43,8 +47,9 @@ def get_weekly_mu_alerts_for_list(pull_list: PullList):
     if not pull_list.mu_enabled:
         return []
 
-    start, end = arrow.utcnow().span('week')
+    start, end = arrow.utcnow().span("week")
 
     return MUPullAlert.objects.filter(
-        series_id__in=pull_list.mupull_set.values_list('series_id', flat=True),
-        alert_date__range=(start.date(), end.date()))
+        series_id__in=pull_list.mupull_set.values_list("series_id", flat=True),
+        alert_date__range=(start.date(), end.date()),
+    )

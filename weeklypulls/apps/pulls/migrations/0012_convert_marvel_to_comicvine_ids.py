@@ -10,13 +10,15 @@ def convert_series_ids(apps, schema_editor):
     """
     Convert Marvel series IDs to ComicVine series IDs and merge records where necessary.
     """
-    Pull = apps.get_model('pulls', 'Pull')
-    MUPull = apps.get_model('pulls', 'MUPull')
-    MUPullAlert = apps.get_model('pulls', 'MUPullAlert')
-    
+    Pull = apps.get_model("pulls", "Pull")
+    MUPull = apps.get_model("pulls", "MUPull")
+    MUPullAlert = apps.get_model("pulls", "MUPullAlert")
+
     # Report initial counts
-    print(f"Starting migration with {Pull.objects.count()} Pulls, {MUPull.objects.count()} MUPulls, {MUPullAlert.objects.count()} MUPullAlerts")
-    
+    print(
+        f"Starting migration with {Pull.objects.count()} Pulls, {MUPull.objects.count()} MUPulls, {MUPullAlert.objects.count()} MUPullAlerts"
+    )
+
     # Marvel ID => ComicVine ID mapping
     # TODO: Replace this placeholder mapping with your generated list
     marvel_to_comicvine_mapping = {
@@ -499,37 +501,39 @@ def convert_series_ids(apps, schema_editor):
         39362: 123862,
         39482: 154417,
     }
-    
+
     if not marvel_to_comicvine_mapping:
         print("Warning: No mapping provided. Skipping migration.")
         return
-    
+
     # Convert and merge Pull records
     convert_and_merge_pulls(Pull, marvel_to_comicvine_mapping)
-    
+
     # Convert and merge MUPull records
     convert_and_merge_mupulls(MUPull, marvel_to_comicvine_mapping)
-    
+
     # Convert MUPullAlert records (no merging needed as they don't have unique constraints)
     convert_mupull_alerts(MUPullAlert, marvel_to_comicvine_mapping)
-    
+
     # Report final counts
-    print(f"Migration completed. Final counts: {Pull.objects.count()} Pulls, {MUPull.objects.count()} MUPulls, {MUPullAlert.objects.count()} MUPullAlerts")
+    print(
+        f"Migration completed. Final counts: {Pull.objects.count()} Pulls, {MUPull.objects.count()} MUPulls, {MUPullAlert.objects.count()} MUPullAlerts"
+    )
 
 
 def convert_and_merge_pulls(Pull, mapping):
     """Convert Pull records and merge duplicates."""
     print("Converting Pull records...")
-    
+
     # Group pulls by pull_list and target ComicVine series_id
     merge_groups = defaultdict(list)
-    
+
     for pull in Pull.objects.all():
         if pull.series_id in mapping:
             comicvine_id = mapping[pull.series_id]
             key = (pull.pull_list_id, comicvine_id)
             merge_groups[key].append(pull)
-    
+
     for (pull_list_id, comicvine_id), pulls in merge_groups.items():
         if len(pulls) == 1:
             # Simple case: just update the series_id
@@ -541,41 +545,45 @@ def convert_and_merge_pulls(Pull, mapping):
             # Merge case: combine read and skipped arrays, keep the first record
             primary_pull = pulls[0]
             primary_pull.series_id = comicvine_id
-            
+
             # Merge read and skipped arrays from all pulls
             all_read = set(primary_pull.read or [])
             all_skipped = set(primary_pull.skipped or [])
-            
+
             for pull in pulls[1:]:
                 if pull.read:
                     all_read.update(pull.read)
                 if pull.skipped:
                     all_skipped.update(pull.skipped)
-                
-                print(f"Deleting duplicate Pull id={pull.id} (merged into {primary_pull.id})")
+
+                print(
+                    f"Deleting duplicate Pull id={pull.id} (merged into {primary_pull.id})"
+                )
                 pull.delete()
-            
+
             # Update primary pull with merged data
             primary_pull.read = list(all_read)
             primary_pull.skipped = list(all_skipped)
             primary_pull.save()
-            
-            print(f"Merged {len(pulls)} Pull records into id={primary_pull.id} with series_id={comicvine_id}")
+
+            print(
+                f"Merged {len(pulls)} Pull records into id={primary_pull.id} with series_id={comicvine_id}"
+            )
 
 
 def convert_and_merge_mupulls(MUPull, mapping):
     """Convert MUPull records and merge duplicates."""
     print("Converting MUPull records...")
-    
+
     # Group MUPulls by pull_list and target ComicVine series_id
     merge_groups = defaultdict(list)
-    
+
     for mupull in MUPull.objects.all():
         if mupull.series_id in mapping:
             comicvine_id = mapping[mupull.series_id]
             key = (mupull.pull_list_id, comicvine_id)
             merge_groups[key].append(mupull)
-    
+
     for (pull_list_id, comicvine_id), mupulls in merge_groups.items():
         if len(mupulls) == 1:
             # Simple case: just update the series_id
@@ -588,25 +596,31 @@ def convert_and_merge_mupulls(MUPull, mapping):
             primary_mupull = min(mupulls, key=lambda x: x.created_at)
             primary_mupull.series_id = comicvine_id
             primary_mupull.save()
-            
+
             for mupull in mupulls:
                 if mupull.id != primary_mupull.id:
-                    print(f"Deleting duplicate MUPull id={mupull.id} (merged into {primary_mupull.id})")
+                    print(
+                        f"Deleting duplicate MUPull id={mupull.id} (merged into {primary_mupull.id})"
+                    )
                     mupull.delete()
-            
-            print(f"Merged {len(mupulls)} MUPull records into id={primary_mupull.id} with series_id={comicvine_id}")
+
+            print(
+                f"Merged {len(mupulls)} MUPull records into id={primary_mupull.id} with series_id={comicvine_id}"
+            )
 
 
 def convert_mupull_alerts(MUPullAlert, mapping):
     """Convert MUPullAlert records (no merging needed)."""
     print("Converting MUPullAlert records...")
-    
+
     for alert in MUPullAlert.objects.all():
         if alert.series_id in mapping:
             old_id = alert.series_id
             alert.series_id = mapping[old_id]
             alert.save()
-            print(f"Updated MUPullAlert id={alert.id} series_id from {old_id} to {alert.series_id}")
+            print(
+                f"Updated MUPullAlert id={alert.id} series_id from {old_id} to {alert.series_id}"
+            )
 
 
 def reverse_convert_series_ids(apps, schema_editor):
@@ -616,7 +630,7 @@ def reverse_convert_series_ids(apps, schema_editor):
     """
     print("Warning: Reverse migration cannot perfectly restore merged records.")
     print("Original Marvel series IDs and merged records are lost.")
-    
+
     # In a real scenario, you might want to prevent reverse migration
     # or implement a more sophisticated approach with backup tables
     raise NotImplementedError(
@@ -628,7 +642,7 @@ def reverse_convert_series_ids(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('pulls', '0011_mupull_mupullalert'),
+        ("pulls", "0011_mupull_mupullalert"),
     ]
 
     operations = [

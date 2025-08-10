@@ -7,6 +7,7 @@ import requests
 # Try to load COMICVINE_API_KEY from a .env if present
 try:
     from dotenv import load_dotenv, find_dotenv  # type: ignore
+
     load_dotenv(find_dotenv())
 except Exception:
     pass
@@ -19,17 +20,29 @@ try:
 except Exception:
     Comicvine = None  # type: ignore
     SQLiteCache = None  # type: ignore
+
     class SimyanServiceError(Exception):  # type: ignore
         pass
+
 
 API = "https://comicvine.gamespot.com/api/issue/4000-{}/"
 HEADERS = {"User-Agent": "weeklypulls/1.0"}
 
 ORDER = [
-    "medium_url", "super_url", "original_url",
-    "screen_url", "small_url", "large_screen_url", "screen_large_url",
-    "thumbnail", "thumb_url", "thumbnail_url", "tiny_url", "icon_url",
+    "medium_url",
+    "super_url",
+    "original_url",
+    "screen_url",
+    "small_url",
+    "large_screen_url",
+    "screen_large_url",
+    "thumbnail",
+    "thumb_url",
+    "thumbnail_url",
+    "tiny_url",
+    "icon_url",
 ]
+
 
 def pick_image_url(img: dict) -> str | None:
     if not isinstance(img, dict):
@@ -39,6 +52,7 @@ def pick_image_url(img: dict) -> str | None:
         if url:
             return url
     return None
+
 
 # Helper that works with dicts or Simyan objects
 def pick_image_url_any(img_obj) -> str | None:
@@ -56,6 +70,7 @@ def pick_image_url_any(img_obj) -> str | None:
         if val:
             return val
     return None
+
 
 def main():
     api_key = os.environ.get("COMICVINE_API_KEY")
@@ -91,7 +106,10 @@ def main():
     # Also fetch via Simyan (if available)
     try:
         if Comicvine is None or SQLiteCache is None:
-            print("\n[Simyan] Skipped (package not installed). Install with: python -m pip install simyan", file=sys.stderr)
+            print(
+                "\n[Simyan] Skipped (package not installed). Install with: python -m pip install simyan",
+                file=sys.stderr,
+            )
             return
 
         try:
@@ -140,6 +158,7 @@ def main():
 
     except Exception as e:
         print(f"\n[Simyan] Error: {e}", file=sys.stderr)
+
 
 if __name__ == "__main__":
     main()

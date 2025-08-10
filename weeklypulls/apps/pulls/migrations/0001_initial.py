@@ -10,17 +10,34 @@ class Migration(migrations.Migration):
 
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='Pull',
+            name="Pull",
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('series_id', models.IntegerField()),
-                ('read', django.contrib.postgres.fields.ArrayField(base_field=models.IntegerField(), size=None)),
-                ('skipped', django.contrib.postgres.fields.ArrayField(base_field=models.IntegerField(), size=None)),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("series_id", models.IntegerField()),
+                (
+                    "read",
+                    django.contrib.postgres.fields.ArrayField(
+                        base_field=models.IntegerField(), size=None
+                    ),
+                ),
+                (
+                    "skipped",
+                    django.contrib.postgres.fields.ArrayField(
+                        base_field=models.IntegerField(), size=None
+                    ),
+                ),
             ],
         ),
     ]

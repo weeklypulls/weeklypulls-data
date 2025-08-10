@@ -32,6 +32,7 @@ comic_template = """{comic[title]}
 
 subject = """New comics on Marvel Universe from your favourite series!"""
 
+
 class Command(BaseCommand):
     help = "Send alerts for MUPulls"
 
@@ -43,7 +44,7 @@ class Command(BaseCommand):
         for alert in today_alerts:
             # this should eventually be parallelised, I think
             # get the comic details
-            api_response = requests.get(f'{settings.MAPI_URL}/comics/{alert.issue_id}')
+            api_response = requests.get(f"{settings.MAPI_URL}/comics/{alert.issue_id}")
             details = api_response.json()
             if not details:
                 logger.error(f"Issue {alert.issue_id} could not be retrieved from MAPI")
@@ -55,19 +56,18 @@ class Command(BaseCommand):
                 comic_list.append(details)
                 alert_map[pl.owner] = comic_list
 
-
         for user in alert_map:
             try:
                 comics = ""
                 for comic in alert_map[user]:
                     comics += comic_template.format(comic=comic)
-                name = user.get_full_name() or user.get_short_name() or user.get_username()
-                message = email_template.format(name=name,
-                                                comics=comics)
+                name = (
+                    user.get_full_name() or user.get_short_name() or user.get_username()
+                )
+                message = email_template.format(name=name, comics=comics)
                 # choose one:
                 # user.email_user() - I/O inefficient (one smtp conn per email)
                 # send_mass_mail() - memory inefficient (gotta store all messages in memory)
                 user.email_user(subject, message, fail_silently=False)
             except SMTPException as e:
                 logger.error(f"Error sending email to {user.email}: {e}")
-

@@ -15,17 +15,22 @@ class Pull(AbstractBaseModel):
         verbose_name_plural = "pulls"
 
     def __str__(self):
-        return 'Pull for {}'.format(self.series_id)
-    
+        return "Pull for {}".format(self.series_id)
+
     def get_comicvine_volume_info(self):
         """Get ComicVine volume information if cached"""
         try:
             from weeklypulls.apps.comicvine.models import ComicVineVolume
+
             volume = ComicVineVolume.objects.get(cv_id=self.series_id)
-            return f"{volume.name} ({volume.start_year})" if volume.start_year else volume.name
+            return (
+                f"{volume.name} ({volume.start_year})"
+                if volume.start_year
+                else volume.name
+            )
         except ComicVineVolume.DoesNotExist:
             return None
-    
+
     @property
     def comicvine_volume_display(self):
         """Display ComicVine volume info or series ID as fallback"""
@@ -38,7 +43,7 @@ class MUPull(AbstractBaseModel):
     series_id = models.IntegerField()
 
     def __str__(self):
-        return f'{self.pull_list} / Series {self.series_id} '
+        return f"{self.pull_list} / Series {self.series_id} "
 
 
 class MUPullAlert(AbstractBaseModel):
@@ -47,7 +52,7 @@ class MUPullAlert(AbstractBaseModel):
     alert_date = models.DateField()
 
     def __str__(self):
-        return f'Series {self.series_id} / Issue {self.issue_id} / {self.alert_date}'
+        return f"Series {self.series_id} / Issue {self.issue_id} / {self.alert_date}"
 
     @staticmethod
     def create_for_issue(issue_id, series_id, publication_date):
@@ -61,7 +66,7 @@ class MUPullAlert(AbstractBaseModel):
         :return: created MUPullAlert
         """
         alert_date = arrow.get(publication_date).replace(months=+6)
-        alert = MUPullAlert.objects.create(series_id=series_id,
-                                           issue_id=issue_id,
-                                           alert_date=alert_date.date())
+        alert = MUPullAlert.objects.create(
+            series_id=series_id, issue_id=issue_id, alert_date=alert_date.date()
+        )
         return alert

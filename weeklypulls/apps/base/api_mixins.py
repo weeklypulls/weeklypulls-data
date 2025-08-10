@@ -6,15 +6,18 @@ from rest_framework.request import Request
 
 
 class OwnedMixin(object):
-    OWNER_LOOKUP_FIELD_ATTRIBUTE = 'owner_lookup_field'
+    OWNER_LOOKUP_FIELD_ATTRIBUTE = "owner_lookup_field"
 
     @staticmethod
     def get_owner_lookup_field(view):
         try:
-            owner_lookup_field = getattr(view, IsOwnerMixin.OWNER_LOOKUP_FIELD_ATTRIBUTE)
+            owner_lookup_field = getattr(
+                view, IsOwnerMixin.OWNER_LOOKUP_FIELD_ATTRIBUTE
+            )
         except AttributeError:
             raise AssertionError(
-                f"'{IsOwnerMixin.OWNER_LOOKUP_FIELD_ATTRIBUTE}' must be explicitly set in '{view.__class__.__name__}'")
+                f"'{IsOwnerMixin.OWNER_LOOKUP_FIELD_ATTRIBUTE}' must be explicitly set in '{view.__class__.__name__}'"
+            )
 
         return owner_lookup_field
 

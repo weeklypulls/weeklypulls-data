@@ -10,38 +10,54 @@ import uuid
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('pull_lists', '0005_pulllist_mu_enabled'),
-        ('pulls', '0010_series_pull_list'),
+        ("pull_lists", "0005_pulllist_mu_enabled"),
+        ("pulls", "0010_series_pull_list"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='MUPull',
+            name="MUPull",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True, db_index=True)),
-                ('modified_at', models.DateTimeField(auto_now=True, db_index=True)),
-                ('series_id', models.IntegerField()),
-                ('pull_list', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='pull_lists.PullList')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True, db_index=True)),
+                ("modified_at", models.DateTimeField(auto_now=True, db_index=True)),
+                ("series_id", models.IntegerField()),
+                (
+                    "pull_list",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to="pull_lists.PullList",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
-                'abstract': False,
+                "ordering": ["-created_at"],
+                "abstract": False,
             },
         ),
         migrations.CreateModel(
-            name='MUPullAlert',
+            name="MUPullAlert",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True, db_index=True)),
-                ('modified_at', models.DateTimeField(auto_now=True, db_index=True)),
-                ('series_id', models.IntegerField()),
-                ('issue_id', models.IntegerField()),
-                ('alert_date', models.DateField()),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True, db_index=True)),
+                ("modified_at", models.DateTimeField(auto_now=True, db_index=True)),
+                ("series_id", models.IntegerField()),
+                ("issue_id", models.IntegerField()),
+                ("alert_date", models.DateField()),
             ],
             options={
-                'ordering': ['-created_at'],
-                'abstract': False,
+                "ordering": ["-created_at"],
+                "abstract": False,
             },
         ),
     ]

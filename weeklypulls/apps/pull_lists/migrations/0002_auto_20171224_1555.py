@@ -8,16 +8,16 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('pull_lists', '0001_initial'),
+        ("pull_lists", "0001_initial"),
     ]
 
     operations = [
         migrations.RenameModel(
-            old_name='List',
-            new_name='PullList',
+            old_name="List",
+            new_name="PullList",
         ),
         migrations.AlterModelOptions(
-            name='pulllist',
-            options={'verbose_name_plural': 'pull lists'},
+            name="pulllist",
+            options={"verbose_name_plural": "pull lists"},
         ),
     ]

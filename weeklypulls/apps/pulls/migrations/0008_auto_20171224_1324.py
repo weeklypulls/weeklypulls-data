@@ -7,7 +7,7 @@ import uuid
 
 
 def create_uuid(apps, schema_editor):
-    Pull = apps.get_model('pulls', 'Pull')
+    Pull = apps.get_model("pulls", "Pull")
     for pull in Pull.objects.all():
         pull.idu = uuid.uuid4()
         pull.save()
@@ -16,18 +16,20 @@ def create_uuid(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('pulls', '0007_auto_20171224_1320'),
+        ("pulls", "0007_auto_20171224_1320"),
     ]
 
     operations = [
         migrations.RunPython(create_uuid),
         migrations.RemoveField(
-            model_name='pull',
-            name='id',
+            model_name="pull",
+            name="id",
         ),
         migrations.AlterField(
-            model_name='pull',
-            name='idu',
-            field=models.UUIDField(default=uuid.uuid4, primary_key=True, serialize=False),
+            model_name="pull",
+            name="idu",
+            field=models.UUIDField(
+                default=uuid.uuid4, primary_key=True, serialize=False
+            ),
         ),
     ]

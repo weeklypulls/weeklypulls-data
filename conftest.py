@@ -14,7 +14,7 @@ def api_client(django_user_model):
     user = django_user_model.objects.create_user(username=username, password=password)
     client = APIClient()
     client.login(username=username, password=password)
-    client.credentials(HTTP_AUTHORIZATION='TOKEN ' + user.auth_token.key)
+    client.credentials(HTTP_AUTHORIZATION="TOKEN " + user.auth_token.key)
     return client
 
 
@@ -24,5 +24,5 @@ def requests_client(django_user_model):
     password = "password1"
     user = django_user_model.objects.create_user(username=username, password=password)
     client = RequestsClient()
-    client.headers.update({'Authorization': f'TOKEN {user.auth_token.key}'})
+    client.headers.update({"Authorization": f"TOKEN {user.auth_token.key}"})
     return client

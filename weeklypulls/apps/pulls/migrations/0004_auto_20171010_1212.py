@@ -8,12 +8,12 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('pulls', '0003_auto_20170709_1902'),
+        ("pulls", "0003_auto_20170709_1902"),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='pull',
-            options={'verbose_name_plural': 'pulls'},
+            name="pull",
+            options={"verbose_name_plural": "pulls"},
         ),
     ]

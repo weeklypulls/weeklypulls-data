@@ -9,28 +9,28 @@ import uuid
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('pulls', '0006_auto_20171011_1336'),
+        ("pulls", "0006_auto_20171011_1336"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='pull',
-            name='idu',
+            model_name="pull",
+            name="idu",
             field=models.UUIDField(default=uuid.uuid4),
         ),
         migrations.AddField(
-            model_name='pull',
-            name='modified_at',
+            model_name="pull",
+            name="modified_at",
             field=models.DateTimeField(auto_now=True, db_index=True),
         ),
         migrations.AlterField(
-            model_name='pull',
-            name='created_at',
+            model_name="pull",
+            name="created_at",
             field=models.DateTimeField(auto_now_add=True, db_index=True),
         ),
         migrations.AlterField(
-            model_name='pull',
-            name='series_id',
+            model_name="pull",
+            name="series_id",
             field=models.IntegerField(),
         ),
     ]

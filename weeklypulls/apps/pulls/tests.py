@@ -1,59 +1,52 @@
 def test_mupulls(live_server, requests_client):
     # create a MU-enabled pull-list
-    data = {
-        'title': 'test mu',
-        'mu_enabled': True
-    }
-    response = requests_client.post(f'{live_server.url}/pull-lists/',
-                                    json=data,
-                                    )
+    data = {"title": "test mu", "mu_enabled": True}
+    response = requests_client.post(
+        f"{live_server.url}/pull-lists/",
+        json=data,
+    )
     assert response.status_code == 201
     result = response.json()
-    assert result['title'] == data['title']
+    assert result["title"] == data["title"]
 
     # check it's returned in view
-    response = requests_client.get(f'{live_server.url}/pull-lists/')
+    response = requests_client.get(f"{live_server.url}/pull-lists/")
     assert response.status_code == 200
     result = response.json()
-    assert result[0]['title'] == data['title']
+    assert result[0]["title"] == data["title"]
 
     # create a MUPull
-    pl_id = result[0]['id']
-    pull_1 = {'pull_list_id': pl_id,
-              'series_id': 23012}
-    response = requests_client.post(f'{live_server.url}/mupulls/',
-                                    json=pull_1)
+    pl_id = result[0]["id"]
+    pull_1 = {"pull_list_id": pl_id, "series_id": 23012}
+    response = requests_client.post(f"{live_server.url}/mupulls/", json=pull_1)
     assert response.status_code == 201
     result = response.json()
-    assert result['pull_list_id'] == pull_1['pull_list_id']
-    assert result['series_id'] == pull_1['series_id']
+    assert result["pull_list_id"] == pull_1["pull_list_id"]
+    assert result["series_id"] == pull_1["series_id"]
 
     # do it again
-    pull_2 = {'pull_list_id': pl_id,
-              'series_id': 23013}
-    response = requests_client.post(f'{live_server.url}/mupulls/',
-                                    json=pull_2)
+    pull_2 = {"pull_list_id": pl_id, "series_id": 23013}
+    response = requests_client.post(f"{live_server.url}/mupulls/", json=pull_2)
     assert response.status_code == 201
 
     # check they are returned in view
-    response = requests_client.get(f'{live_server.url}/mupulls/')
+    response = requests_client.get(f"{live_server.url}/mupulls/")
     assert response.status_code == 200
     result = response.json()
     assert len(result) == 2
 
     # purge the IDs so we can compare straight
-    for d in result: d.pop('id')
+    for d in result:
+        d.pop("id")
     assert pull_1 in result
     assert pull_2 in result
 
     # check bulk creation
-    pull_bulk = [{'pull_list_id': pl_id,
-                  'series_id': i} for i in range(1, 3)]
+    pull_bulk = [{"pull_list_id": pl_id, "series_id": i} for i in range(1, 3)]
 
-    response = requests_client.post(f'{live_server.url}/mupulls/',
-                                    json=pull_bulk)
+    response = requests_client.post(f"{live_server.url}/mupulls/", json=pull_bulk)
     assert response.status_code == 201
-    response = requests_client.get(f'{live_server.url}/mupulls/')
+    response = requests_client.get(f"{live_server.url}/mupulls/")
     assert response.status_code == 200
     result = response.json()
     assert len(result) == 4
@@ -61,8 +54,6 @@ def test_mupulls(live_server, requests_client):
     # check deletion
     response = requests_client.delete(f'{live_server.url}/mupulls/{result[0]["id"]}/')
     assert response.status_code == 204
-    response = requests_client.get(f'{live_server.url}/mupulls/')
+    response = requests_client.get(f"{live_server.url}/mupulls/")
     result = response.json()
     assert len(result) == 3
-
-

@@ -9,18 +9,22 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('pulls', '0001_initial'),
+        ("pulls", "0001_initial"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='pull',
-            name='read',
-            field=django.contrib.postgres.fields.ArrayField(base_field=models.IntegerField(), blank=True, size=None),
+            model_name="pull",
+            name="read",
+            field=django.contrib.postgres.fields.ArrayField(
+                base_field=models.IntegerField(), blank=True, size=None
+            ),
         ),
         migrations.AlterField(
-            model_name='pull',
-            name='skipped',
-            field=django.contrib.postgres.fields.ArrayField(base_field=models.IntegerField(), blank=True, size=None),
+            model_name="pull",
+            name="skipped",
+            field=django.contrib.postgres.fields.ArrayField(
+                base_field=models.IntegerField(), blank=True, size=None
+            ),
         ),
     ]

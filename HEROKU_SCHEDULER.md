@@ -160,3 +160,8 @@ heroku run python manage.py primecache --dry-run --limit 20
 # Test with smaller limits to verify behavior
 heroku run python manage.py primecache --limit 5
 ```
+
+# Heroku Scheduler Notes
+
+- Use `python manage.py` tasks as needed.
+- Code formatting: run `black .` locally before deployments to keep diffs clean.

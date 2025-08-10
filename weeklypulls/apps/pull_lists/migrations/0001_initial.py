@@ -10,20 +10,24 @@ class Migration(migrations.Migration):
 
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='List',
+            name="List",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, primary_key=True, serialize=False)),
-                ('created_at', models.DateTimeField(auto_now_add=True, db_index=True)),
-                ('modified_at', models.DateTimeField(auto_now=True, db_index=True)),
-                ('title', models.CharField(max_length=280)),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4, primary_key=True, serialize=False
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True, db_index=True)),
+                ("modified_at", models.DateTimeField(auto_now=True, db_index=True)),
+                ("title", models.CharField(max_length=280)),
             ],
             options={
-                'verbose_name_plural': 'lists',
+                "verbose_name_plural": "lists",
             },
         ),
     ]

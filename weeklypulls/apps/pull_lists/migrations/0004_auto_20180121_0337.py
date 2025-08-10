@@ -10,13 +10,17 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('pull_lists', '0003_pulllist_owner'),
+        ("pull_lists", "0003_pulllist_owner"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='pulllist',
-            name='owner',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='pull_lists', to=settings.AUTH_USER_MODEL),
+            model_name="pulllist",
+            name="owner",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="pull_lists",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
     ]

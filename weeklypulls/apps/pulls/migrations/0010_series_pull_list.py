@@ -10,18 +10,19 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('pull_lists', '0002_auto_20171224_1555'),
-        ('pulls', '0009_auto_20171224_1540'),
+        ("pull_lists", "0002_auto_20171224_1555"),
+        ("pulls", "0009_auto_20171224_1540"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='pull',
-            name='pull_list',
+            model_name="pull",
+            name="pull_list",
             field=models.ForeignKey(
-                default=uuid.UUID('{6279f5e0-b8f8-4263-a9f1-45c46a009dfc}'),
+                default=uuid.UUID("{6279f5e0-b8f8-4263-a9f1-45c46a009dfc}"),
                 on_delete=django.db.models.deletion.CASCADE,
-                to='pull_lists.PullList'),
+                to="pull_lists.PullList",
+            ),
             preserve_default=False,
         ),
     ]

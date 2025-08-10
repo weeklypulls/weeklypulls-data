@@ -8,13 +8,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('pulls', '0005_series_created_at'),
+        ("pulls", "0005_series_created_at"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='pull',
-            name='series_id',
+            model_name="pull",
+            name="series_id",
             field=models.IntegerField(unique=True),
         ),
     ]
