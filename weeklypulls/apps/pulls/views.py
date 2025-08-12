@@ -1,5 +1,5 @@
 from django.http import Http404
-from django.db.models import Q
+from django.db.models import Q, F
 from django.db.models.functions import Coalesce
 from rest_framework.mixins import CreateModelMixin
 from rest_framework.request import clone_request
@@ -79,6 +79,48 @@ class WeekSerializer(serializers.Serializer):
     comics = WeekComicSerializer(many=True)
 
 
+"""Common helpers for issue querying / serialization"""
+
+# Image resolution preference order (first non-null wins)
+IMAGE_FIELD_CANDIDATES = (
+    "image_medium_url",
+    "image_super_url",
+    "image_original_url",
+    "image_screen_url",
+    "image_small_url",
+    "image_thumbnail_url",
+    "image_tiny_url",
+    "image_icon_url",
+)
+
+# Minimal fields required for unread issues endpoint (with volume context)
+ISSUE_BASE_ONLY_FIELDS = (
+    "cv_id",
+    "name",
+    "number",
+    "store_date",
+    "cover_date",
+    "description",
+    *IMAGE_FIELD_CANDIDATES,
+    "volume__cv_id",
+    "volume__name",
+    "volume__start_year",
+)
+
+
+def with_issue_image_annotation(qs):
+    """Annotate a queryset with a unified image_url using first non-null candidate."""
+    return qs.annotate(image_url=Coalesce(*[F(f) for f in IMAGE_FIELD_CANDIDATES]))
+
+
+ALLOWED_UNREAD_ORDERINGS = {
+    "store_date": ("-store_date", "-cover_date"),  # default grouping (newest first)
+    "-store_date": ("-store_date", "-cover_date"),
+    "cover_date": ("-cover_date", "-store_date"),
+    "-cover_date": ("-cover_date", "-store_date"),
+}
+
+
 class PullViewSet(viewsets.ModelViewSet):
     queryset = Pull.objects.all()
     serializer_class = PullSerializer
@@ -153,44 +195,20 @@ class PullViewSet(viewsets.ModelViewSet):
 
             unread_conditions |= series_condition
 
-        # Query unread issues with optimized fetching
+        # Determine ordering preference (default: newest store_date first)
+        ordering_param = request.query_params.get("ordering")
+        order_tuple = ALLOWED_UNREAD_ORDERINGS.get(
+            ordering_param or "store_date", ("-store_date", "-cover_date")
+        )
+
         unread_issues = (
-            ComicVineIssue.objects.filter(unread_conditions)
-            .select_related("volume")
-            .only(
-                # Only fetch fields we actually need
-                "cv_id",
-                "name",
-                "number",
-                "store_date",
-                "cover_date",
-                "description",
-                "image_medium_url",
-                "image_super_url",
-                "image_original_url",
-                "image_screen_url",
-                "image_small_url",
-                "image_thumbnail_url",
-                "image_tiny_url",
-                "image_icon_url",
-                "site_url",
-                "volume__cv_id",
-                "volume__name",
-                "volume__start_year",
-            )
-            .annotate(
-                image_url=Coalesce(
-                    "image_medium_url",
-                    "image_super_url",
-                    "image_original_url",
-                    "image_screen_url",
-                    "image_small_url",
-                    "image_thumbnail_url",
-                    "image_tiny_url",
-                    "image_icon_url",
+            with_issue_image_annotation(
+                ComicVineIssue.objects.filter(unread_conditions).select_related(
+                    "volume"
                 )
             )
-            .order_by("-store_date", "-cover_date")
+            .only(*ISSUE_BASE_ONLY_FIELDS, "site_url")
+            .order_by(*order_tuple)
         )
 
         serializer = UnreadIssueSerializer(
@@ -217,37 +235,19 @@ class WeeksViewSet(viewsets.ViewSet):
 
         # Issues for that week in user's series
         issues = (
-            ComicVineIssue.objects.filter(
-                volume__cv_id__in=series_ids, store_date=week_date
+            with_issue_image_annotation(
+                ComicVineIssue.objects.filter(
+                    volume__cv_id__in=series_ids, store_date=week_date
+                ).select_related("volume")
             )
-            .select_related("volume")
             .only(
                 "cv_id",
                 "name",
                 "number",
                 "store_date",
-                "image_medium_url",
-                "image_super_url",
-                "image_original_url",
-                "image_screen_url",
-                "image_small_url",
-                "image_thumbnail_url",
-                "image_tiny_url",
-                "image_icon_url",
+                *IMAGE_FIELD_CANDIDATES,
                 "volume__cv_id",
                 "volume__name",
-            )
-            .annotate(
-                image_url=Coalesce(
-                    "image_medium_url",
-                    "image_super_url",
-                    "image_original_url",
-                    "image_screen_url",
-                    "image_small_url",
-                    "image_thumbnail_url",
-                    "image_tiny_url",
-                    "image_icon_url",
-                )
             )
             .order_by("volume__name", "number")
         )
@@ -299,32 +299,15 @@ class SeriesViewSet(viewsets.ViewSet):
 
         # Fetch all issues for this volume
         issues = (
-            ComicVineIssue.objects.filter(volume__cv_id=volume.cv_id)
+            with_issue_image_annotation(
+                ComicVineIssue.objects.filter(volume__cv_id=volume.cv_id)
+            )
             .only(
                 "cv_id",
                 "name",
                 "number",
                 "store_date",
-                "image_medium_url",
-                "image_super_url",
-                "image_original_url",
-                "image_screen_url",
-                "image_small_url",
-                "image_thumbnail_url",
-                "image_tiny_url",
-                "image_icon_url",
-            )
-            .annotate(
-                image_url=Coalesce(
-                    "image_medium_url",
-                    "image_super_url",
-                    "image_original_url",
-                    "image_screen_url",
-                    "image_small_url",
-                    "image_thumbnail_url",
-                    "image_tiny_url",
-                    "image_icon_url",
-                )
+                *IMAGE_FIELD_CANDIDATES,
             )
             .order_by("store_date", "number")
         )
