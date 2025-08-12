@@ -20,6 +20,26 @@ class PullSerializer(serializers.HyperlinkedModelSerializer):
     pull_list_id = serializers.PrimaryKeyRelatedField(
         source="pull_list", queryset=PullList.objects.all()
     )
+    series_title = serializers.SerializerMethodField()
+    series_start_year = serializers.SerializerMethodField()
+
+    def get_series_title(self, obj):
+        from weeklypulls.apps.comicvine.models import ComicVineVolume
+
+        volume = (
+            ComicVineVolume.objects.filter(cv_id=obj.series_id).only("name").first()
+        )
+        return getattr(volume, "name", None)
+
+    def get_series_start_year(self, obj):
+        from weeklypulls.apps.comicvine.models import ComicVineVolume
+
+        volume = (
+            ComicVineVolume.objects.filter(cv_id=obj.series_id)
+            .only("start_year")
+            .first()
+        )
+        return getattr(volume, "start_year", None)
 
     class Meta:
         model = Pull
@@ -28,6 +48,8 @@ class PullSerializer(serializers.HyperlinkedModelSerializer):
             "series_id",
             "read",
             "pull_list_id",
+            "series_title",
+            "series_start_year",
         )
 
 
