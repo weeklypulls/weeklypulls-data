@@ -247,77 +247,82 @@ class Command(BaseCommand):
         return recent_volumes
 
     def _get_volumes_needing_issues(self, max_volumes=None):
-        """Get volumes that exist but don't have issue data cached, prioritized by activity"""
+        """Return a prioritized list of volumes needing issue fetches.
+
+        Phases (in order):
+          1. Recent (last 5 years): select if no issues cached or incomplete (< count_of_issues)
+          2. Older (>5 years): select if no issues cached
+          3. Stale fallback: if capacity remains, choose volumes (any age) with the oldest
+             issue.last_updated (or volume.last_updated) to rotate coverage.
+        """
         now = timezone.now()
         current_year = now.year
-
-        # If no max_volumes specified, use a reasonable default
         if max_volumes is None:
             max_volumes = 10
-
-        # Don't go crazy - cap at a reasonable number even with high API limits
         max_volumes = min(max_volumes, 50)
-
-        # Get volumes that have pulls but no cached issues
         volumes_with_pulls = ComicVineVolume.objects.filter(
             cv_id__in=Pull.objects.values_list("series_id", flat=True).distinct()
         )
-
-        # Prioritize recent series that are more likely to be actively read
         volumes_without_issues = []
 
-        # Priority 1: Recent series (last 5 years) - likely active
-        recent_volumes = volumes_with_pulls.filter(
+        # Phase 1: recent
+        recent_qs = volumes_with_pulls.filter(
             start_year__gte=current_year - 5
         ).order_by("-start_year")
-
-        for volume in recent_volumes:
+        for volume in recent_qs:
             if len(volumes_without_issues) >= max_volumes:
                 break
-
             issue_count = ComicVineIssue.objects.filter(volume=volume).count()
-            needs = False
             if issue_count == 0:
                 reason = "no issues cached"
-                needs = True
             elif issue_count < volume.count_of_issues:
                 reason = (
                     f"incomplete ({issue_count} < expected {volume.count_of_issues})"
                 )
-                needs = True
             else:
                 reason = None
-            if needs:
+            if reason:
                 self.stdout.write(
                     f"Select (recent) {volume.cv_id}: {volume.name} ({volume.start_year}) - {reason}"
                 )
                 volumes_without_issues.append(volume)
 
-        # Priority 2: Fill remaining spots with older series if needed
+        # Phase 2: older
         if len(volumes_without_issues) < max_volumes:
-            older_volumes = volumes_with_pulls.filter(
+            older_qs = volumes_with_pulls.filter(
                 start_year__lt=current_year - 5
-            ).order_by(
-                "-start_year"
-            )  # More recent of the older ones first
-
-            for volume in older_volumes:
+            ).order_by("-start_year")
+            for volume in older_qs:
                 if len(volumes_without_issues) >= max_volumes:
                     break
                 issue_count = ComicVineIssue.objects.filter(volume=volume).count()
-                needs = False
-                if issue_count == 0:
-                    reason = "no issues cached"
-                    needs = True
-                elif issue_count % 50 == 0 and issue_count > 0:
-                    reason = f"possible partial pagination ({issue_count} issues)"
-                    needs = True
-                else:
-                    reason = None
-                if needs:
+                reason = "no issues cached" if issue_count == 0 else None
+                if reason:
                     self.stdout.write(
                         f"Select (older) {volume.cv_id}: {volume.name} ({volume.start_year}) - {reason}"
                     )
                     volumes_without_issues.append(volume)
+
+        # Phase 3: stale fallback
+        if len(volumes_without_issues) < max_volumes:
+            remaining = max_volumes - len(volumes_without_issues)
+            already_ids = {v.cv_id for v in volumes_without_issues}
+            candidate_volumes = volumes_with_pulls.exclude(cv_id__in=already_ids)
+            stale_info = []
+            for vol in candidate_volumes:
+                oldest_issue = (
+                    ComicVineIssue.objects.filter(volume=vol)
+                    .order_by("last_updated")
+                    .values_list("last_updated", flat=True)
+                    .first()
+                )
+                metric = oldest_issue or vol.last_updated
+                stale_info.append((metric, vol))
+            stale_info.sort(key=lambda tup: tup[0] or timezone.now())
+            for metric, vol in stale_info[:remaining]:
+                self.stdout.write(
+                    f"Select (stale) {vol.cv_id}: {vol.name} ({vol.start_year}) - oldest issue ts {metric}"
+                )
+                volumes_without_issues.append(vol)
 
         return volumes_without_issues
