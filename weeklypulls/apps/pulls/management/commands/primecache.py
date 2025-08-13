@@ -275,9 +275,22 @@ class Command(BaseCommand):
             if len(volumes_without_issues) >= max_volumes:
                 break
 
-            # Check if volume has no issues OR fewer than the records indicate
             issue_count = ComicVineIssue.objects.filter(volume=volume).count()
-            if issue_count == 0 or issue_count < volume.count_of_issues:
+            needs = False
+            if issue_count == 0:
+                reason = "no issues cached"
+                needs = True
+            elif issue_count < volume.count_of_issues:
+                reason = (
+                    f"incomplete ({issue_count} < expected {volume.count_of_issues})"
+                )
+                needs = True
+            else:
+                reason = None
+            if needs:
+                self.stdout.write(
+                    f"Select (recent) {volume.cv_id}: {volume.name} ({volume.start_year}) - {reason}"
+                )
                 volumes_without_issues.append(volume)
 
         # Priority 2: Fill remaining spots with older series if needed
@@ -291,10 +304,20 @@ class Command(BaseCommand):
             for volume in older_volumes:
                 if len(volumes_without_issues) >= max_volumes:
                     break
-                # Check if volume has no issues OR has fewer than 50 (indicating incomplete fetch)
                 issue_count = ComicVineIssue.objects.filter(volume=volume).count()
-                if issue_count == 0 or (issue_count % 50 == 0 and issue_count > 0):
-                    # Either no issues, or a multiple of 50 (might be incomplete)
+                needs = False
+                if issue_count == 0:
+                    reason = "no issues cached"
+                    needs = True
+                elif issue_count % 50 == 0 and issue_count > 0:
+                    reason = f"possible partial pagination ({issue_count} issues)"
+                    needs = True
+                else:
+                    reason = None
+                if needs:
+                    self.stdout.write(
+                        f"Select (older) {volume.cv_id}: {volume.name} ({volume.start_year}) - {reason}"
+                    )
                     volumes_without_issues.append(volume)
 
         return volumes_without_issues
