@@ -61,19 +61,5 @@ class Migration(migrations.Migration):
         ),
         migrations.RunPython(backfill_owner, migrations.RunPython.noop),
         migrations.RunPython(dedupe_pulls, migrations.RunPython.noop),
-        migrations.AlterField(
-            model_name="pull",
-            name="owner",
-            field=models.ForeignKey(
-                on_delete=models.deletion.CASCADE,
-                related_name="pulls",
-                to=settings.AUTH_USER_MODEL,
-            ),
-        ),
-        migrations.AddConstraint(
-            model_name="pull",
-            constraint=models.UniqueConstraint(
-                fields=("owner", "series_id"), name="uniq_pull_owner_series"
-            ),
-        ),
+        # Owner remains nullable in this step; NOT NULL and UNIQUE come in 0018
     ]
