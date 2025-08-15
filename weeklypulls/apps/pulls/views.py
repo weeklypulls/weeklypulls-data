@@ -163,6 +163,21 @@ class PullViewSet(viewsets.ModelViewSet):
             serializer.data, status=status.HTTP_201_CREATED, headers=headers
         )
 
+    def perform_create(self, serializer):
+        """Ensure owner is set for new Pulls and support bulk create."""
+        # When many=True, DRF's ListSerializer doesn't forward **kwargs to child.create,
+        # so we need to handle creation manually to set owner.
+        validated = serializer.validated_data
+        if isinstance(validated, list):
+            objs = []
+            for attrs in validated:
+                # attrs is a dict with keys like 'pull_list', 'series_id', 'read'
+                obj = Pull.objects.create(owner=self.request.user, **attrs)
+                objs.append(obj)
+            serializer.instance = objs
+        else:
+            serializer.save(owner=self.request.user)
+
     @action(detail=True, methods=["post"])
     def mark_read(self, request, pk=None):
         """Mark a single issue id as read for this pull."""
@@ -203,11 +218,17 @@ class PullViewSet(viewsets.ModelViewSet):
 
         # Build query for unread issues more efficiently
         unread_conditions = Q()
+
+        # Map each series to the user's pull that has the FEWEST read issues so links go to
+        # the pull that actually has unread items when duplicates exist across pull lists.
         series_to_pull = {}
 
         for pull in user_pulls:
-            # Map series_id to pull.id for serializer context
-            series_to_pull[pull.series_id] = pull.id
+            # Prefer the pull with the fewest reads for this series
+            rc = len(pull.read or [])
+            prev = series_to_pull.get(pull.series_id)
+            if prev is None or rc < prev[0]:
+                series_to_pull[pull.series_id] = (rc, pull.id)
             # For each pull, find issues in that series that aren't read
             series_condition = Q(volume__cv_id=pull.series_id)
 
@@ -233,8 +254,10 @@ class PullViewSet(viewsets.ModelViewSet):
             .order_by(*order_tuple)
         )
 
+        # Collapse mapping to series_id -> pull_id
+        series_to_pull_ids = {k: v[1] for k, v in series_to_pull.items()}
         serializer = UnreadIssueSerializer(
-            unread_issues, many=True, context={"series_to_pull": series_to_pull}
+            unread_issues, many=True, context={"series_to_pull": series_to_pull_ids}
         )
         return Response(serializer.data, status=status.HTTP_200_OK)
 

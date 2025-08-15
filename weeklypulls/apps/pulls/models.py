@@ -2,17 +2,30 @@ import arrow
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
 
+from django.conf import settings
 from weeklypulls.apps.base.models import AbstractBaseModel
 from weeklypulls.apps.pull_lists.models import PullList
 
 
 class Pull(AbstractBaseModel):
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="pulls",
+        null=True,  # temporarily nullable; migration will backfill then set non-null
+        blank=True,
+    )
     pull_list = models.ForeignKey(PullList, on_delete=models.CASCADE)
     series_id = models.IntegerField()
     read = ArrayField(models.IntegerField(), default=list)
 
     class Meta:
         verbose_name_plural = "pulls"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner", "series_id"], name="uniq_pull_owner_series"
+            )
+        ]
 
     def __str__(self):
         return "Pull for {}".format(self.series_id)
