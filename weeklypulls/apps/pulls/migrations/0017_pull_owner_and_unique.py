@@ -40,6 +40,8 @@ def dedupe_pulls(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+    # Run operations in separate transactions to avoid "pending trigger events"
+    atomic = False
 
     dependencies = [
         ("pulls", "0016_remove_pull_migrated_to_comicvine"),
