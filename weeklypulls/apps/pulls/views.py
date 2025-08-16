@@ -10,6 +10,9 @@ from weeklypulls.apps.pulls.models import Pull, MUPull
 from weeklypulls.apps.comicvine.models import ComicVineIssue, ComicVineVolume
 from rest_framework import routers, serializers, viewsets, status
 from rest_framework.permissions import IsAuthenticated
+from datetime import datetime, timedelta
+from weeklypulls.apps.comicvine.services import ComicVineService
+from django.utils import timezone
 
 from weeklypulls.apps.base.filters import IsOwnerFilterBackend
 from weeklypulls.apps.pull_lists.models import PullList
@@ -143,6 +146,23 @@ ALLOWED_UNREAD_ORDERINGS = {
 }
 
 
+def issue_to_week_comic(issue):
+    """Map a ComicVineIssue (with volume and image_url annotated) to the week/series comic dict."""
+    vol_name = getattr(issue.volume, "name", "")
+    number = getattr(issue, "number", "")
+    title = f"{vol_name} #{number}".strip()
+    # Trust annotated image_url produced by with_issue_image_annotation
+    image = getattr(issue, "image_url", None)
+    images = [image] if image else []
+    return {
+        "id": str(issue.cv_id),
+        "images": images,
+        "on_sale": issue.store_date,
+        "series_id": str(getattr(issue.volume, "cv_id", "")),
+        "title": title,
+    }
+
+
 class PullViewSet(viewsets.ModelViewSet):
     queryset = Pull.objects.all()
     serializer_class = PullSerializer
@@ -263,64 +283,76 @@ class PullViewSet(viewsets.ModelViewSet):
 
 
 class WeeksViewSet(viewsets.ViewSet):
-    """Return issues for a specific week (store_date) for the authenticated user's pulls."""
+    """Discovery: return ALL issues for a specific week (store_date).
+
+    This endpoint is not limited to the user's existing pulls. It is intended
+    to help users discover new series releasing that week and optionally create
+    new pulls for them.
+    """
 
     permission_classes = (IsAuthenticated,)
 
     def retrieve(self, request, pk=None):
-        week_date = pk  # Expecting YYYY-MM-DD
-        # Pulls for this user
-        user_pulls = Pull.objects.filter(pull_list__owner=request.user).only(
-            "series_id", "pull_list__owner", "read"
-        )
+        # Expect pk as YYYY-MM-DD; compute Monday-Sunday range for that week
+        try:
+            target_date = datetime.strptime(pk, "%Y-%m-%d").date()
+        except Exception:
+            return Response(
+                {"detail": "Invalid date. Expected YYYY-MM-DD."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        series_ids = list(user_pulls.values_list("series_id", flat=True))
-        if not series_ids:
-            return Response({"comics": []}, status=status.HTTP_200_OK)
+        # ISO weekday: Monday=1..Sunday=7
+        days_from_monday = target_date.isoweekday() - 1
+        start_date = target_date - timedelta(days=days_from_monday)
+        end_date = start_date + timedelta(days=6)
 
-        # Issues for that week in user's series
+        # Optionally prime from API (default: on) to ensure uncached issues are present
+        prime = request.query_params.get("prime", "true").lower() != "false"
+        if prime:
+            # Use a lightweight week cache to avoid repeated primes within the TTL
+            from weeklypulls.apps.comicvine.models import ComicVineCacheWeek
+
+            week_key = start_date  # Monday
+            week_cache = ComicVineCacheWeek.objects.filter(week_start=week_key).first()
+
+            should_prime = True
+            if (
+                week_cache
+                and not week_cache.is_cache_expired()
+                and not week_cache.api_fetch_failed
+            ):
+                should_prime = False
+
+            if should_prime:
+                try:
+                    ComicVineService().prime_issues_for_date_range(start_date, end_date)
+                    # Mark or update cache entry with a reasonable TTL (e.g., 7 days)
+                    ttl_days = 7
+                    if not week_cache:
+                        week_cache = ComicVineCacheWeek(week_start=week_key)
+                    week_cache.cache_expires = timezone.now() + timedelta(days=ttl_days)
+                    week_cache.reset_api_failure()
+                    week_cache.save()
+                except Exception:
+                    # Non-fatal; still try to serve from DB
+                    if not week_cache:
+                        week_cache = ComicVineCacheWeek(week_start=week_key)
+                    week_cache.mark_api_failure()
+                    week_cache.save()
+
+        # Discovery mode: return ALL issues in the Monday–Sunday range (inclusive)
         issues = (
             with_issue_image_annotation(
                 ComicVineIssue.objects.filter(
-                    volume__cv_id__in=series_ids, store_date=week_date
+                    store_date__gte=start_date, store_date__lte=end_date
                 ).select_related("volume")
             )
-            .only(
-                "cv_id",
-                "name",
-                "number",
-                "store_date",
-                *IMAGE_FIELD_CANDIDATES,
-                "volume__cv_id",
-                "volume__name",
-            )
-            .order_by("volume__name", "number")
+            .only(*ISSUE_BASE_ONLY_FIELDS)
+            .order_by("store_date", "volume__name", "number")
         )
 
-        comics = []
-        # Build a set for quicker read lookup: series_id -> set(read_ids)
-        reads_by_series = {}
-        for p in user_pulls:
-            reads_by_series[str(p.series_id)] = set(p.read or [])
-
-        for issue in issues:
-            # Compose a title like "<Volume Name> #<number>"
-            vol_name = getattr(issue.volume, "name", "")
-            number = getattr(issue, "number", "")
-            title = f"{vol_name} #{number}".strip()
-            image = getattr(issue, "image_medium_url", None) or getattr(
-                issue, "image_url", None
-            )
-            images = [image] if image else []
-            comics.append(
-                {
-                    "id": str(issue.cv_id),
-                    "images": images,
-                    "on_sale": issue.store_date,
-                    "series_id": str(getattr(issue.volume, "cv_id", "")),
-                    "title": title,
-                }
-            )
+        comics = [issue_to_week_comic(issue) for issue in issues]
 
         serializer = WeekSerializer({"comics": comics})
         return Response(serializer.data, status=status.HTTP_200_OK)
@@ -347,35 +379,11 @@ class SeriesViewSet(viewsets.ViewSet):
             with_issue_image_annotation(
                 ComicVineIssue.objects.filter(volume__cv_id=volume.cv_id)
             )
-            .only(
-                "cv_id",
-                "name",
-                "number",
-                "store_date",
-                *IMAGE_FIELD_CANDIDATES,
-            )
+            .only(*ISSUE_BASE_ONLY_FIELDS)
             .order_by("store_date", "number")
         )
 
-        comics = []
-        for issue in issues:
-            # Title like "#<number> <name>" or volume name + # if you prefer
-            number = getattr(issue, "number", "")
-            name = getattr(issue, "name", "") or ""
-            title = f"{volume.name} #{number}".strip()
-            image = getattr(issue, "image_medium_url", None) or getattr(
-                issue, "image_url", None
-            )
-            images = [image] if image else []
-            comics.append(
-                {
-                    "id": str(issue.cv_id),
-                    "images": images,
-                    "on_sale": issue.store_date,
-                    "series_id": str(volume.cv_id),
-                    "title": title,
-                }
-            )
+        comics = [issue_to_week_comic(issue) for issue in issues]
 
         series_payload = {
             "series_id": str(volume.cv_id),

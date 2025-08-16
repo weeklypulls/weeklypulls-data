@@ -109,3 +109,22 @@ class ComicVineIssue(ComicVineCacheModel):
         number_str = f" #{self.number}" if self.number else ""
         name_str = f": {self.name}" if self.name else ""
         return f"{volume_name}{number_str}{name_str}"
+
+
+class ComicVineCacheWeek(ComicVineCacheModel):
+    """Tracks priming of ComicVine issues for a given week (Monday start).
+
+    Use week_start as the canonical key (Monday of that ISO week). When
+    cache_expires is in the future, the week is considered fresh and the
+    Weeks endpoint can skip re-priming from the API.
+    """
+
+    week_start = models.DateField(unique=True)
+
+    class Meta:
+        db_table = "comicvine_weeks"
+        verbose_name = "ComicVine Weekly Cache"
+        verbose_name_plural = "ComicVine Weekly Caches"
+
+    def __str__(self):
+        return f"Week starting {self.week_start} (expires {self.cache_expires:%Y-%m-%d %H:%M})"

@@ -197,129 +197,13 @@ class ComicVineService:
             created_count = 0
             updated_count = 0
 
-            for issue in issues:
-                # Parse dates with better error handling
-                store_date = None
-                cover_date = None
-                date_added = None
-                date_last_updated = None
-
-                # Parse store_date
-                raw = issue.store_date
-                if raw:
-                    try:
-                        if isinstance(raw, datetime.date) and not isinstance(
-                            raw, datetime.datetime
-                        ):
-                            store_date = raw
-                        elif isinstance(raw, datetime.datetime):
-                            store_date = raw.date()
-                        else:
-                            store_date = parse(raw).date()
-                    except Exception as e:
-                        print(
-                            f"Failed to parse store_date '{raw}' for issue {issue.id}: {e}"
-                        )
-
-                # Parse cover_date
-                raw = issue.cover_date
-                if raw:
-                    try:
-                        if isinstance(raw, datetime.date) and not isinstance(
-                            raw, datetime.datetime
-                        ):
-                            cover_date = raw
-                        elif isinstance(raw, datetime.datetime):
-                            cover_date = raw.date()
-                        else:
-                            cover_date = parse(raw).date()
-                    except Exception as e:
-                        print(
-                            f"Failed to parse cover_date '{raw}' for issue {issue.id}: {e}"
-                        )
-
-                # Parse date_added
-                raw = issue.date_added
-                if raw:
-                    try:
-                        if isinstance(raw, (datetime.date, datetime.datetime)):
-                            date_added = raw
-                        else:
-                            date_added = parse(raw)
-                    except Exception as e:
-                        print(
-                            f"Failed to parse date_added '{raw}' for issue {issue.id}: {e}"
-                        )
-                # Ensure timezone-aware UTC
-                if isinstance(date_added, datetime.datetime):
-                    if timezone.is_naive(date_added):
-                        date_added = timezone.make_aware(
-                            date_added, datetime.timezone.utc
-                        )
-                    else:
-                        date_added = date_added.astimezone(datetime.timezone.utc)
-
-                # Parse date_last_updated
-                raw = issue.date_last_updated
-                if raw:
-                    try:
-                        if isinstance(raw, (datetime.date, datetime.datetime)):
-                            date_last_updated = raw
-                        else:
-                            date_last_updated = parse(raw)
-                    except Exception as e:
-                        print(
-                            f"Failed to parse date_last_updated '{raw}' for issue {issue.id}: {e}"
-                        )
-                # Ensure timezone-aware UTC
-                if isinstance(date_last_updated, datetime.datetime):
-                    if timezone.is_naive(date_last_updated):
-                        date_last_updated = timezone.make_aware(
-                            date_last_updated, datetime.timezone.utc
-                        )
-                    else:
-                        date_last_updated = date_last_updated.astimezone(
-                            datetime.timezone.utc
-                        )
-
-                # Image URLs (explicit fields)
-                img = issue.image
-
-                # Create or update ComicVineIssue record (inline values, no temps)
-                issue_data = {
-                    "name": issue.name,
-                    "number": issue.number,
-                    "volume": volume,
-                    "store_date": store_date,
-                    "cover_date": cover_date,
-                    "description": issue.description,
-                    "date_added": date_added,
-                    "date_last_updated": date_last_updated,
-                    "api_url": issue.api_url,
-                    "site_url": issue.site_url,
-                    "cache_expires": timezone.now() + timedelta(days=30),
-                    "image_icon_url": img.icon_url,
-                    "image_thumbnail_url": img.thumbnail,
-                    "image_tiny_url": img.tiny_url,
-                    "image_small_url": img.small_url,
-                    "image_medium_url": (
-                        img.medium_url
-                        or img.super_url
-                        or img.screen_url
-                        or img.small_url
-                        or img.original_url
-                        or img.thumbnail
-                        or img.tiny_url
-                        or img.icon_url
-                    ),
-                    "image_screen_url": img.screen_url,
-                    "image_super_url": img.super_url,
-                    "image_large_screen_url": img.large_screen_url,
-                    "image_original_url": img.original_url,
-                }
+            for s_issue in issues:
+                defaults, store_date, date_added = self._build_issue_defaults(
+                    s_issue, volume
+                )
 
                 comic_issue, created = ComicVineIssue.objects.update_or_create(
-                    cv_id=issue.id, defaults=issue_data
+                    cv_id=s_issue.id, defaults=defaults
                 )
 
                 if created:
@@ -330,9 +214,9 @@ class ComicVineService:
                 # Add to return list (inline values)
                 issue_list.append(
                     {
-                        "id": issue.id,
-                        "number": issue.number,
-                        "name": issue.name,
+                        "id": s_issue.id,
+                        "number": s_issue.number,
+                        "name": s_issue.name,
                         "date_added": date_added,
                         "store_date": store_date,
                     }
@@ -356,3 +240,171 @@ class ComicVineService:
                 f"API ERROR: issues for volume/{volume_id} - Unexpected error: {str(e)} - {response_time_ms}ms"
             )
             return []
+
+    def prime_issues_for_date_range(self, start_date, end_date) -> dict:
+        """Fetch and upsert all issues with store_date in [start_date, end_date].
+
+        Returns a summary dict with counts. Safe to call if API key missing.
+        """
+        if not self.cv:
+            logger.warning("ComicVine API not configured; skipping weekly prime")
+            return {"created": 0, "updated": 0, "fetched": 0}
+
+        from .models import (
+            ComicVineIssue,
+            ComicVineVolume,
+        )  # local import to avoid cycles
+
+        total_fetched = 0
+        created_count = 0
+        updated_count = 0
+
+        # Iterate each day to avoid uncertain API range filter syntax
+        cur = start_date
+        while cur <= end_date:
+            try:
+                page = 0
+                day_fetched = 0
+                while page < 3:  # reasonable safety limit
+                    page += 1
+                    issues = self.cv.list_issues(
+                        params={
+                            "offset": (page - 1) * 500,
+                            "filter": f"store_date:{cur.strftime('%Y-%m-%d')}",
+                            "sort": "store_date:asc",
+                        },
+                    )
+                    if not issues:
+                        break
+                    day_fetched += len(issues)
+                    for s_issue in issues:
+                        # Ensure volume exists/updated minimally
+                        vol = getattr(s_issue, "volume", None)
+                        vol_id = getattr(vol, "id", None)
+                        vol_name = getattr(vol, "name", None)
+                        if vol_id is None:
+                            # skip issues without a volume id
+                            continue
+                        volume = self._ensure_volume(vol_id, vol_name)
+
+                        defaults, _, _ = self._build_issue_defaults(s_issue, volume)
+
+                        comic_issue, created = ComicVineIssue.objects.update_or_create(
+                            cv_id=s_issue.id, defaults=defaults
+                        )
+                        if created:
+                            created_count += 1
+                        else:
+                            updated_count += 1
+
+                total_fetched += day_fetched
+            except ServiceError as e:
+                logger.error(f"API ERROR: weekly issues for {cur}: {e}")
+            except Exception as e:
+                logger.error(f"Unexpected error fetching weekly issues for {cur}: {e}")
+
+            cur += datetime.timedelta(days=1)
+
+        summary = {
+            "created": created_count,
+            "updated": updated_count,
+            "fetched": total_fetched,
+        }
+        logger.info(
+            f"Weekly prime {start_date}..{end_date}: {summary['fetched']} fetched, {summary['created']} created, {summary['updated']} updated"
+        )
+        return summary
+
+    # -------------------------
+    # Internal helpers (DRY)
+    # -------------------------
+    def _parse_date(self, raw):
+        if not raw:
+            return None
+        try:
+            if isinstance(raw, datetime.date) and not isinstance(
+                raw, datetime.datetime
+            ):
+                return raw
+            if isinstance(raw, datetime.datetime):
+                return raw.date()
+            return parse(raw).date()
+        except Exception:
+            return None
+
+    def _parse_datetime_utc(self, raw):
+        if not raw:
+            return None
+        try:
+            if isinstance(raw, (datetime.date, datetime.datetime)):
+                dt = raw
+            else:
+                dt = parse(raw)
+            if isinstance(dt, datetime.date) and not isinstance(dt, datetime.datetime):
+                # promote date to datetime midnight UTC
+                dt = datetime.datetime(dt.year, dt.month, dt.day)
+            if timezone.is_naive(dt):
+                return timezone.make_aware(dt, datetime.timezone.utc)
+            return dt.astimezone(datetime.timezone.utc)
+        except Exception:
+            return None
+
+    def _get_img(self, img, attr):
+        return getattr(img, attr, None) if img is not None else None
+
+    def _ensure_volume(self, vol_id: int, vol_name: str):
+        from .models import ComicVineVolume  # local import
+
+        try:
+            return ComicVineVolume.objects.get(cv_id=vol_id)
+        except ComicVineVolume.DoesNotExist:
+            volume = ComicVineVolume(
+                cv_id=vol_id,
+                name=vol_name or f"Volume {vol_id}",
+                start_year=None,
+                count_of_issues=0,
+                cache_expires=timezone.now() + timedelta(days=30),
+            )
+            volume.reset_api_failure()
+            volume.save()
+            return volume
+
+    def _build_issue_defaults(self, s_issue, volume):
+        store_date = self._parse_date(getattr(s_issue, "store_date", None))
+        cover_date = self._parse_date(getattr(s_issue, "cover_date", None))
+        date_added = self._parse_datetime_utc(getattr(s_issue, "date_added", None))
+        date_last_updated = self._parse_datetime_utc(
+            getattr(s_issue, "date_last_updated", None)
+        )
+        img = getattr(s_issue, "image", None)
+
+        defaults = {
+            "name": getattr(s_issue, "name", None),
+            "number": getattr(s_issue, "number", None),
+            "volume": volume,
+            "store_date": store_date,
+            "cover_date": cover_date,
+            "description": getattr(s_issue, "description", None),
+            "date_added": date_added,
+            "date_last_updated": date_last_updated,
+            "api_url": getattr(s_issue, "api_url", None),
+            "site_url": getattr(s_issue, "site_url", None),
+            "cache_expires": timezone.now() + timedelta(days=30),
+            "image_icon_url": self._get_img(img, "icon_url"),
+            "image_thumbnail_url": self._get_img(img, "thumbnail"),
+            "image_tiny_url": self._get_img(img, "tiny_url"),
+            "image_small_url": self._get_img(img, "small_url"),
+            "image_medium_url": self._get_img(img, "medium_url")
+            or self._get_img(img, "super_url")
+            or self._get_img(img, "screen_url")
+            or self._get_img(img, "small_url")
+            or self._get_img(img, "original_url")
+            or self._get_img(img, "thumbnail")
+            or self._get_img(img, "tiny_url")
+            or self._get_img(img, "icon_url"),
+            "image_screen_url": self._get_img(img, "screen_url"),
+            "image_super_url": self._get_img(img, "super_url"),
+            "image_large_screen_url": self._get_img(img, "large_screen_url"),
+            "image_original_url": self._get_img(img, "original_url"),
+        }
+        return defaults, store_date, date_added
