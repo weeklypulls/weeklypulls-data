@@ -35,6 +35,11 @@ class ComicVineService:
             # Initialize Simyan with built-in SQLite caching
             cache = SQLiteCache()
             self.cv = Comicvine(api_key=self.api_key, cache=cache)
+            # Ensure HTTP calls have a finite timeout to avoid worker hangs
+            try:
+                self.cv.timeout = getattr(settings, "COMICVINE_HTTP_TIMEOUT", 8)
+            except Exception:
+                pass
 
     def get_volume(
         self, volume_id: int, force_refresh: bool = False
@@ -259,6 +264,10 @@ class ComicVineService:
         created_count = 0
         updated_count = 0
 
+        # Overall time budget for this priming call to protect request latency
+        budget_seconds = getattr(settings, "COMICVINE_PRIME_BUDGET_SECONDS", 6)
+        budget_start = time.time()
+
         # Iterate each day to avoid uncertain API range filter syntax
         cur = start_date
         while cur <= end_date:
@@ -266,6 +275,9 @@ class ComicVineService:
                 page = 0
                 day_fetched = 0
                 while page < 3:  # reasonable safety limit
+                    # Respect overall time budget
+                    if time.time() - budget_start > budget_seconds:
+                        break
                     page += 1
                     issues = self.cv.list_issues(
                         params={
@@ -304,6 +316,10 @@ class ComicVineService:
                 logger.error(f"Unexpected error fetching weekly issues for {cur}: {e}")
 
             cur += datetime.timedelta(days=1)
+
+            # Stop if over budget
+            if time.time() - budget_start > budget_seconds:
+                break
 
         summary = {
             "created": created_count,

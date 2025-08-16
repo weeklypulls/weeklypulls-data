@@ -98,9 +98,14 @@ class WeekComicSerializer(serializers.Serializer):
     on_sale = serializers.DateField()
     series_id = serializers.CharField()
     title = serializers.CharField()
+    # Optional pull context for the authenticated user
+    pull_id = serializers.CharField(required=False, allow_null=True)
+    pulled = serializers.BooleanField(required=False, default=False)
+    read = serializers.BooleanField(required=False, default=False)
 
 
 class WeekSerializer(serializers.Serializer):
+    week_of = serializers.DateField()
     comics = WeekComicSerializer(many=True)
 
 
@@ -352,9 +357,40 @@ class WeeksViewSet(viewsets.ViewSet):
             .order_by("store_date", "volume__name", "number")
         )
 
-        comics = [issue_to_week_comic(issue) for issue in issues]
+        # Build mapping of series -> user's Pull (preferring the one with fewest reads if duplicates exist)
+        user_pulls = (
+            Pull.objects.filter(pull_list__owner=request.user)
+            .only("id", "series_id", "read", "pull_list__owner")
+            .select_related("pull_list")
+        )
+        series_to_pull = {}
+        for pull in user_pulls:
+            rc = len(pull.read or [])
+            prev = series_to_pull.get(pull.series_id)
+            if prev is None or rc < prev[0]:
+                series_to_pull[pull.series_id] = (rc, pull)
 
-        serializer = WeekSerializer({"comics": comics})
+        comics = []
+        for issue in issues:
+            base = issue_to_week_comic(issue)
+            series_id = int(base["series_id"]) if base.get("series_id") else None
+            pull_tuple = series_to_pull.get(series_id)
+            if pull_tuple:
+                _rc, pull = pull_tuple
+                read_set = set(pull.read or [])
+                is_read = int(base["id"]) in read_set
+                base.update(
+                    {
+                        "pull_id": str(pull.id),
+                        "pulled": True,
+                        "read": is_read,
+                    }
+                )
+            else:
+                base.update({"pull_id": None, "pulled": False, "read": False})
+            comics.append(base)
+
+        serializer = WeekSerializer({"week_of": start_date, "comics": comics})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
