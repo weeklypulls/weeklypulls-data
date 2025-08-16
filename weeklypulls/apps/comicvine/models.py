@@ -119,7 +119,7 @@ class ComicVineCacheWeek(ComicVineCacheModel):
     Weeks endpoint can skip re-priming from the API.
     """
 
-    week_start = models.DateField(unique=True)
+    week_start = models.DateField(primary_key=True)
 
     class Meta:
         db_table = "comicvine_weeks"
