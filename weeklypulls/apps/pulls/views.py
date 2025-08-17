@@ -98,6 +98,10 @@ class WeekComicSerializer(serializers.Serializer):
     on_sale = serializers.DateField()
     series_id = serializers.CharField()
     title = serializers.CharField()
+    # Optional extended fields for detail pages
+    cover_date = serializers.DateField(required=False, allow_null=True)
+    site_url = serializers.CharField(required=False, allow_null=True)
+    description = serializers.CharField(required=False, allow_null=True)
     # Optional pull context for the authenticated user
     pull_id = serializers.CharField(required=False, allow_null=True)
     pulled = serializers.BooleanField(required=False, default=False)
@@ -159,13 +163,21 @@ def issue_to_week_comic(issue):
     # Trust annotated image_url produced by with_issue_image_annotation
     image = getattr(issue, "image_url", None)
     images = [image] if image else []
-    return {
+    payload = {
         "id": str(issue.cv_id),
         "images": images,
         "on_sale": issue.store_date,
         "series_id": str(getattr(issue.volume, "cv_id", "")),
         "title": title,
     }
+    # Optional extras if available on the instance
+    if hasattr(issue, "cover_date"):
+        payload["cover_date"] = getattr(issue, "cover_date", None)
+    if hasattr(issue, "site_url"):
+        payload["site_url"] = getattr(issue, "site_url", None)
+    if hasattr(issue, "description"):
+        payload["description"] = getattr(issue, "description", None)
+    return payload
 
 
 class PullViewSet(viewsets.ModelViewSet):
@@ -353,7 +365,7 @@ class WeeksViewSet(viewsets.ViewSet):
                     store_date__gte=start_date, store_date__lte=end_date
                 ).select_related("volume")
             )
-            .only(*ISSUE_BASE_ONLY_FIELDS)
+            .only(*ISSUE_BASE_ONLY_FIELDS, "site_url")
             .order_by("store_date", "volume__name", "number")
         )
 
@@ -415,7 +427,7 @@ class SeriesViewSet(viewsets.ViewSet):
             with_issue_image_annotation(
                 ComicVineIssue.objects.filter(volume__cv_id=volume.cv_id)
             )
-            .only(*ISSUE_BASE_ONLY_FIELDS)
+            .only(*ISSUE_BASE_ONLY_FIELDS, "site_url")
             .order_by("store_date", "number")
         )
 
