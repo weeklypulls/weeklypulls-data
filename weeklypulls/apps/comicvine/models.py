@@ -38,6 +38,24 @@ class ComicVineCacheModel(models.Model):
         self.save()
 
 
+class ComicVinePublisher(models.Model):
+    """Lightweight cache of ComicVine publishers.
+
+    Only stores the ComicVine ID and display name. cv_id is the primary key.
+    """
+
+    cv_id = models.IntegerField(unique=True, primary_key=True)
+    name = models.CharField(max_length=200)
+
+    class Meta:
+        db_table = "comicvine_publishers"
+        verbose_name = "ComicVine Publisher"
+        verbose_name_plural = "ComicVine Publishers"
+
+    def __str__(self):
+        return self.name
+
+
 class ComicVineVolume(ComicVineCacheModel):
     """Cache for ComicVine volume (series) data"""
 
@@ -45,6 +63,14 @@ class ComicVineVolume(ComicVineCacheModel):
     name = models.CharField(max_length=500)
     start_year = models.IntegerField(null=True, blank=True)
     count_of_issues = models.IntegerField(default=0)
+    # Link to publisher (ComicVine entity). Nullable if unknown.
+    publisher = models.ForeignKey(
+        ComicVinePublisher,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="volumes",
+    )
 
     class Meta:
         db_table = "comicvine_volumes"

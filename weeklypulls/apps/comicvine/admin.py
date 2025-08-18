@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import ComicVineVolume, ComicVineIssue
+from .models import ComicVineVolume, ComicVineIssue, ComicVinePublisher
 
 
 @admin.register(ComicVineVolume)
@@ -10,16 +10,21 @@ class ComicVineVolumeAdmin(admin.ModelAdmin):
         "name",
         "start_year",
         "count_of_issues",
+        "publisher",
         "last_updated",
         "is_cache_expired",
         "api_fetch_failed",
     )
-    list_filter = ("api_fetch_failed", "start_year")
-    search_fields = ("name", "cv_id")
+    list_filter = ("api_fetch_failed", "start_year", "publisher")
+    search_fields = ("name", "cv_id", "publisher__name")
     readonly_fields = ("last_updated", "api_fetch_failure_count", "api_last_failure")
+    raw_id_fields = ("publisher",)
 
     fieldsets = (
-        ("Basic Info", {"fields": ("cv_id", "name", "start_year", "count_of_issues")}),
+        (
+            "Basic Info",
+            {"fields": ("cv_id", "name", "start_year", "count_of_issues", "publisher")},
+        ),
         (
             "Cache Status",
             {
@@ -39,6 +44,17 @@ class ComicVineVolumeAdmin(admin.ModelAdmin):
 
     is_cache_expired.boolean = True
     is_cache_expired.short_description = "Cache Expired"
+
+
+@admin.register(ComicVinePublisher)
+class ComicVinePublisherAdmin(admin.ModelAdmin):
+    list_display = ("cv_id", "name", "volumes_count")
+    search_fields = ("name", "cv_id")
+
+    def volumes_count(self, obj):
+        return obj.volumes.count()
+
+    volumes_count.short_description = "# Volumes"
 
 
 @admin.register(ComicVineIssue)

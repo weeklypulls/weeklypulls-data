@@ -11,7 +11,7 @@ from simyan.comicvine import Comicvine
 from simyan.sqlite_cache import SQLiteCache
 from simyan.exceptions import ServiceError
 
-from .models import ComicVineVolume
+from .models import ComicVineVolume, ComicVinePublisher
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +106,24 @@ class ComicVineService:
             volume.count_of_issues = (
                 cv_volume.issue_count or 0
             )  # Simyan uses issue_count
+            # Publisher (FK) — create/update lightweight publisher row and link
+            try:
+                pub = getattr(cv_volume, "publisher", None)
+                pub_id = getattr(pub, "id", None) if pub else None
+                pub_name = getattr(pub, "name", None) if pub else None
+                if pub_id is not None:
+                    publisher_obj, _ = ComicVinePublisher.objects.get_or_create(
+                        cv_id=pub_id,
+                        defaults={"name": pub_name or f"Publisher {pub_id}"},
+                    )
+                    if pub_name and publisher_obj.name != pub_name:
+                        publisher_obj.name = pub_name
+                        publisher_obj.save(update_fields=["name"])
+                    volume.publisher = publisher_obj
+                else:
+                    volume.publisher = None
+            except Exception:
+                volume.publisher = None
             volume.cache_expires = timezone.now() + timedelta(
                 hours=self.cache_expire_hours
             )
@@ -294,10 +312,19 @@ class ComicVineService:
                         vol = getattr(s_issue, "volume", None)
                         vol_id = getattr(vol, "id", None)
                         vol_name = getattr(vol, "name", None)
+                        pub_payload = None
+                        try:
+                            pub = getattr(vol, "publisher", None)
+                            pub_id = getattr(pub, "id", None) if pub else None
+                            pub_name = getattr(pub, "name", None) if pub else None
+                            if pub_id is not None:
+                                pub_payload = {"id": pub_id, "name": pub_name}
+                        except Exception:
+                            pub_payload = None
                         if vol_id is None:
                             # skip issues without a volume id
                             continue
-                        volume = self._ensure_volume(vol_id, vol_name)
+                        volume = self._ensure_volume(vol_id, vol_name, pub_payload)
 
                         defaults, _, _ = self._build_issue_defaults(s_issue, volume)
 
@@ -368,17 +395,52 @@ class ComicVineService:
     def _get_img(self, img, attr):
         return getattr(img, attr, None) if img is not None else None
 
-    def _ensure_volume(self, vol_id: int, vol_name: str):
+    def _ensure_volume(
+        self, vol_id: int, vol_name: str, publisher: Optional[dict] = None
+    ):
         from .models import ComicVineVolume  # local import
 
         try:
-            return ComicVineVolume.objects.get(cv_id=vol_id)
+            volume = ComicVineVolume.objects.get(cv_id=vol_id)
+            # Backfill publisher FK if available and missing
+            if publisher and not getattr(volume, "publisher", None):
+                from .models import ComicVinePublisher as _CVP
+
+                pub_id = publisher.get("id")
+                pub_name = publisher.get("name")
+                if pub_id is not None:
+                    publisher_obj, _ = _CVP.objects.get_or_create(
+                        cv_id=pub_id,
+                        defaults={"name": pub_name or f"Publisher {pub_id}"},
+                    )
+                    if pub_name and publisher_obj.name != pub_name:
+                        publisher_obj.name = pub_name
+                        publisher_obj.save(update_fields=["name"])
+                    volume.publisher = publisher_obj
+                    volume.save(update_fields=["publisher"])
+            return volume
         except ComicVineVolume.DoesNotExist:
+            # Create publisher if provided
+            publisher_obj = None
+            if publisher:
+                from .models import ComicVinePublisher as _CVP
+
+                pub_id = publisher.get("id")
+                pub_name = publisher.get("name")
+                if pub_id is not None:
+                    publisher_obj, _ = _CVP.objects.get_or_create(
+                        cv_id=pub_id,
+                        defaults={"name": pub_name or f"Publisher {pub_id}"},
+                    )
+                    if pub_name and publisher_obj.name != pub_name:
+                        publisher_obj.name = pub_name
+                        publisher_obj.save(update_fields=["name"])
             volume = ComicVineVolume(
                 cv_id=vol_id,
                 name=vol_name or f"Volume {vol_id}",
                 start_year=None,
                 count_of_issues=0,
+                publisher=publisher_obj,
                 cache_expires=timezone.now() + timedelta(days=30),
             )
             volume.reset_api_failure()
