@@ -137,7 +137,7 @@ class ComicVineIssue(ComicVineCacheModel):
         return f"{volume_name}{number_str}{name_str}"
 
 
-class ComicVineCacheWeek(ComicVineCacheModel):
+class ComicVineWeek(ComicVineCacheModel):
     """Tracks priming of ComicVine issues for a given week (Monday start).
 
     Use week_start as the canonical key (Monday of that ISO week). When
@@ -146,6 +146,11 @@ class ComicVineCacheWeek(ComicVineCacheModel):
     """
 
     week_start = models.DateField(primary_key=True)
+    # Whether the last priming attempt completed all needed API pages for the week
+    priming_complete = models.BooleanField(default=False)
+    # Resume markers: which date to prime next (within this week), and the last fully-fetched page for that date
+    next_date_to_prime = models.DateField(null=True, blank=True)
+    current_day_page = models.IntegerField(default=0)
 
     class Meta:
         db_table = "comicvine_weeks"

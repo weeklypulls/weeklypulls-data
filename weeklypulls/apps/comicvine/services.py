@@ -264,14 +264,17 @@ class ComicVineService:
             )
             return []
 
-    def prime_issues_for_date_range(self, start_date, end_date) -> dict:
+    def prime_issues_for_date_range(
+        self, start_date, end_date, *, start_page: int = 1
+    ) -> dict:
         """Fetch and upsert all issues with store_date in [start_date, end_date].
 
-        Returns a summary dict with counts. Safe to call if API key missing.
+        Returns a summary dict with counts and a 'complete' flag indicating
+        whether the pass finished within the time budget. Safe to call if API key missing.
         """
         if not self.cv:
             logger.warning("ComicVine API not configured; skipping weekly prime")
-            return {"created": 0, "updated": 0, "fetched": 0}
+            return {"created": 0, "updated": 0, "fetched": 0, "complete": True}
 
         from .models import (
             ComicVineIssue,
@@ -281,6 +284,7 @@ class ComicVineService:
         total_fetched = 0
         created_count = 0
         updated_count = 0
+        budget_exhausted = False
 
         # Overall time budget for this priming call to protect request latency
         budget_seconds = getattr(settings, "COMICVINE_PRIME_BUDGET_SECONDS", 6)
@@ -288,15 +292,17 @@ class ComicVineService:
 
         # Iterate each day to avoid uncertain API range filter syntax
         cur = start_date
+        first_day = True
+        last_page_used = max(1, start_page)
         while cur <= end_date:
             try:
-                page = 0
+                page = max(1, start_page) if first_day else 1
                 day_fetched = 0
-                while page < 3:  # reasonable safety limit
+                while page <= 3:  # reasonable safety limit
                     # Respect overall time budget
                     if time.time() - budget_start > budget_seconds:
+                        budget_exhausted = True
                         break
-                    page += 1
                     issues = self.cv.list_issues(
                         params={
                             "offset": (page - 1) * 500,
@@ -336,22 +342,35 @@ class ComicVineService:
                         else:
                             updated_count += 1
 
+                    last_page_used = page
+                    # Stop paging the day if fewer than a full page returned
+                    if len(issues) < 500:
+                        break
+                    page += 1
+
                 total_fetched += day_fetched
             except ServiceError as e:
                 logger.error(f"API ERROR: weekly issues for {cur}: {e}")
             except Exception as e:
                 logger.error(f"Unexpected error fetching weekly issues for {cur}: {e}")
 
+            # After the first day, resume from page 1 for subsequent days
+            first_day = False
+            start_page = 1
             cur += datetime.timedelta(days=1)
 
             # Stop if over budget
             if time.time() - budget_start > budget_seconds:
+                budget_exhausted = True
                 break
 
+        complete = not budget_exhausted
         summary = {
             "created": created_count,
             "updated": updated_count,
             "fetched": total_fetched,
+            "complete": complete,
+            "next_page": 1 if complete else (last_page_used + 1),
         }
         logger.info(
             f"Weekly prime {start_date}..{end_date}: {summary['fetched']} fetched, {summary['created']} created, {summary['updated']} updated"

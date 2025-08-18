@@ -328,33 +328,41 @@ class WeeksViewSet(viewsets.ViewSet):
         prime = request.query_params.get("prime", "true").lower() != "false"
         if prime:
             # Use a lightweight week cache to avoid repeated primes within the TTL
-            from weeklypulls.apps.comicvine.models import ComicVineCacheWeek
+            from weeklypulls.apps.comicvine.models import ComicVineWeek
 
             week_key = start_date  # Monday
-            week_cache = ComicVineCacheWeek.objects.filter(week_start=week_key).first()
+            week_cache = ComicVineWeek.objects.filter(week_start=week_key).first()
 
-            should_prime = True
-            if (
-                week_cache
-                and not week_cache.is_cache_expired()
-                and not week_cache.api_fetch_failed
-            ):
-                should_prime = False
+            # Prime if there's no cache, the cache is expired, a previous failure, or priming hasn't completed yet
+            should_prime = (
+                not week_cache
+                or week_cache.is_cache_expired()
+                or week_cache.api_fetch_failed
+                or not getattr(week_cache, "priming_complete", False)
+            )
 
             if should_prime:
                 try:
-                    ComicVineService().prime_issues_for_date_range(start_date, end_date)
-                    # Mark or update cache entry with a reasonable TTL (e.g., 7 days)
-                    ttl_days = 7
+                    summary = ComicVineService().prime_issues_for_date_range(
+                        start_date, end_date
+                    )
+                    # Mark or update cache entry; use shorter TTL when incomplete to retry soon
                     if not week_cache:
-                        week_cache = ComicVineCacheWeek(week_start=week_key)
-                    week_cache.cache_expires = timezone.now() + timedelta(days=ttl_days)
+                        week_cache = ComicVineWeek(week_start=week_key)
+                    complete = bool(summary.get("complete", False))
+                    week_cache.priming_complete = complete
                     week_cache.reset_api_failure()
+                    if complete:
+                        week_cache.cache_expires = timezone.now() + timedelta(days=7)
+                    else:
+                        week_cache.cache_expires = timezone.now() + timedelta(
+                            seconds=60
+                        )
                     week_cache.save()
                 except Exception:
-                    # Non-fatal; still try to serve from DB
+                    # Non-fatal; still try to serve from DB and mark failure
                     if not week_cache:
-                        week_cache = ComicVineCacheWeek(week_start=week_key)
+                        week_cache = ComicVineWeek(week_start=week_key)
                     week_cache.mark_api_failure()
                     week_cache.save()
 
