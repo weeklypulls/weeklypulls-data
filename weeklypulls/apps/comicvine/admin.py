@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import ComicVineVolume, ComicVineIssue, ComicVinePublisher
+from .models import ComicVineVolume, ComicVineIssue, ComicVinePublisher, ComicVineWeek
 
 
 @admin.register(ComicVineVolume)
@@ -50,11 +50,40 @@ class ComicVineVolumeAdmin(admin.ModelAdmin):
 class ComicVinePublisherAdmin(admin.ModelAdmin):
     list_display = ("cv_id", "name", "volumes_count")
     search_fields = ("name", "cv_id")
+    ordering = ("name",)
 
     def volumes_count(self, obj):
         return obj.volumes.count()
 
     volumes_count.short_description = "# Volumes"
+
+
+@admin.register(ComicVineWeek)
+class ComicVineWeekAdmin(admin.ModelAdmin):
+    list_display = (
+        "week_start",
+        "priming_complete",
+        "next_date_to_prime",
+        "current_day_page",
+        "cache_expires",
+        "last_updated",
+        "api_fetch_failed",
+        "api_fetch_failure_count",
+    )
+    list_filter = ("priming_complete", "api_fetch_failed")
+    search_fields = ("week_start",)
+    date_hierarchy = "week_start"
+    readonly_fields = (
+        "last_updated",
+        "api_fetch_failure_count",
+        "api_last_failure",
+    )
+
+    def is_cache_expired(self, obj):
+        return obj.is_cache_expired()
+
+    is_cache_expired.boolean = True
+    is_cache_expired.short_description = "Cache Expired"
 
 
 @admin.register(ComicVineIssue)
