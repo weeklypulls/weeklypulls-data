@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     "allauth.socialaccount",
     "dj_rest_auth",
     "dj_rest_auth.registration",
+    "django_filters",
     "weeklypulls.apps.base",
     "weeklypulls.apps.pulls.apps.PullsConfig",
     "weeklypulls.apps.pull_lists.apps.ListsConfig",
@@ -35,6 +36,10 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework.authentication.TokenAuthentication",
     ),
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.OrderingFilter",
+    ],
 }
 
 MIDDLEWARE = [

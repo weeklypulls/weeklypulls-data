@@ -18,6 +18,29 @@ from django.utils import timezone
 from weeklypulls.apps.base.filters import IsOwnerFilterBackend
 from weeklypulls.apps.pull_lists.models import PullList
 from weeklypulls.apps.pulls.permissions import IsPullListOwner
+from weeklypulls.apps.base.annotations import with_sort_date
+
+try:
+    import django_filters  # type: ignore
+except Exception:  # pragma: no cover - optional in dev before deps installed
+    django_filters = None  # type: ignore
+
+if django_filters is not None:
+
+    class IssueFilter(django_filters.FilterSet):
+        since = django_filters.DateFilter(field_name="sort_date", lookup_expr="gte")
+        series_id = django_filters.NumberFilter(field_name="volume__cv_id")
+
+        class Meta:
+            model = ComicVineIssue
+            fields = ["since", "series_id"]
+
+else:
+    # Fallback no-op filter when django-filter isn't available yet
+    class IssueFilter:  # type: ignore
+        def __init__(self, _data, queryset):
+            self.qs = queryset
+
 
 logger = logging.getLogger(__name__)
 
@@ -282,20 +305,27 @@ class PullViewSet(viewsets.ModelViewSet):
         ordering_param = request.query_params.get("ordering")
         order_tuple = ALLOWED_UNREAD_ORDERINGS.get(ordering_param or "date", ("-date",))
 
-        unread_issues = (
-            with_issue_image_annotation(
-                ComicVineIssue.objects.filter(unread_conditions).select_related(
-                    "volume"
-                )
-            )
-            .only(*ISSUE_BASE_ONLY_FIELDS, "site_url")
-            .order_by(*order_tuple)
+        base_qs = ComicVineIssue.objects.filter(unread_conditions).select_related(
+            "volume"
         )
+        unread_issues = with_issue_image_annotation(with_sort_date(base_qs)).only(
+            *ISSUE_BASE_ONLY_FIELDS, "site_url"
+        )
+        # Apply django-filter (since/series_id) and ordering
+        filterset = IssueFilter(request.GET, queryset=unread_issues)
+        qs = filterset.qs.order_by(*order_tuple)
+        # Apply simple limit param but keep response as a plain list (no envelope)
+        try:
+            limit = int(request.query_params.get("limit", "50"))
+        except Exception:
+            limit = 50
+        limit = max(1, min(200, limit))
+        qs = qs[:limit]
 
         # Collapse mapping to series_id -> pull_id
         series_to_pull_ids = {k: v[1] for k, v in series_to_pull.items()}
         serializer = UnreadIssueSerializer(
-            unread_issues, many=True, context={"series_to_pull": series_to_pull_ids}
+            qs, many=True, context={"series_to_pull": series_to_pull_ids}
         )
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -399,15 +429,29 @@ class WeeksViewSet(viewsets.ViewSet):
                     week_cache.save()
 
         # Discovery mode: return ALL issues in the Monday–Sunday range (inclusive)
-        issues = (
-            with_issue_image_annotation(
-                ComicVineIssue.objects.filter(
-                    date__gte=start_date, date__lte=end_date
-                ).select_related("volume")
-            )
-            .only(*ISSUE_BASE_ONLY_FIELDS, "site_url")
-            .order_by("date", "volume__name", "number")
+        base_week_qs = ComicVineIssue.objects.filter(
+            date__gte=start_date, date__lte=end_date
+        ).select_related("volume")
+        week_qs = with_issue_image_annotation(with_sort_date(base_week_qs)).only(
+            *ISSUE_BASE_ONLY_FIELDS, "site_url"
         )
+        # Ordering: date alias maps to sort_date
+        ordering_param = request.query_params.get("ordering") or "date"
+        if ordering_param == "-date":
+            order_tuple = ("-sort_date", "-volume__name", "-number")
+        elif ordering_param == "date":
+            order_tuple = ("sort_date", "volume__name", "number")
+        else:
+            # fallback to default ascending by date
+            order_tuple = ("sort_date", "volume__name", "number")
+        week_qs = week_qs.order_by(*order_tuple)
+        # Limit results to keep payloads reasonable
+        try:
+            limit = int(request.query_params.get("limit", "1000"))
+        except Exception:
+            limit = 1000
+        limit = max(1, min(2000, limit))
+        issues = week_qs[:limit]
         try:
             issues_count = issues.count()
         except Exception:
@@ -482,14 +526,32 @@ class SeriesViewSet(viewsets.ViewSet):
         except (ComicVineVolume.DoesNotExist, ValueError):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        # Fetch all issues for this volume
-        issues = (
-            with_issue_image_annotation(
-                ComicVineIssue.objects.filter(volume__cv_id=volume.cv_id)
-            )
-            .only(*ISSUE_BASE_ONLY_FIELDS, "site_url")
-            .order_by("date", "number")
+        # Fetch issues for this volume with standard sort/filter
+        base_series_qs = ComicVineIssue.objects.filter(volume__cv_id=volume.cv_id)
+        series_qs = with_issue_image_annotation(with_sort_date(base_series_qs)).only(
+            *ISSUE_BASE_ONLY_FIELDS, "site_url"
         )
+        # Filters: since
+        try:
+            since = request.query_params.get("since")
+            if since:
+                series_qs = series_qs.filter(sort_date__gte=since)
+        except Exception:
+            pass
+        # Ordering
+        ordering_param = request.query_params.get("ordering") or "date"
+        if ordering_param == "-date":
+            order_tuple = ("-sort_date", "-number")
+        else:
+            order_tuple = ("sort_date", "number")
+        series_qs = series_qs.order_by(*order_tuple)
+        # Limit
+        try:
+            limit = int(request.query_params.get("limit", "1000"))
+        except Exception:
+            limit = 1000
+        limit = max(1, min(2000, limit))
+        issues = series_qs[:limit]
 
         comics = [issue_to_week_comic(issue) for issue in issues]
 
