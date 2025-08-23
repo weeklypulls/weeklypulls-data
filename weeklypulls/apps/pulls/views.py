@@ -350,8 +350,14 @@ class WeeksViewSet(viewsets.ViewSet):
 
             if should_prime:
                 try:
+                    # Use resume markers if present
+                    resume_date = getattr(week_cache, "next_date_to_prime", None)
+                    resume_page = getattr(week_cache, "current_day_page", 1) or 1
                     summary = ComicVineService().prime_issues_for_date_range(
-                        start_date, end_date
+                        start_date,
+                        end_date,
+                        start_page=resume_page,
+                        resume_date=resume_date,
                     )
                     logger.info(
                         "WeeksViewSet.retrieve primed week=%s summary=%s req_id=%s",
@@ -365,6 +371,13 @@ class WeeksViewSet(viewsets.ViewSet):
                     complete = bool(summary.get("complete", False))
                     week_cache.priming_complete = complete
                     week_cache.reset_api_failure()
+                    # Persist resume markers when not complete
+                    if not complete:
+                        week_cache.next_date_to_prime = summary.get("next_date")
+                        week_cache.current_day_page = int(summary.get("next_page", 1))
+                    else:
+                        week_cache.next_date_to_prime = None
+                        week_cache.current_day_page = 0
                     if complete:
                         week_cache.cache_expires = timezone.now() + timedelta(days=7)
                     else:

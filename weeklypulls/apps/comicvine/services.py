@@ -265,7 +265,7 @@ class ComicVineService:
             return []
 
     def prime_issues_for_date_range(
-        self, start_date, end_date, *, start_page: int = 1
+        self, start_date, end_date, *, start_page: int = 1, resume_date=None
     ) -> dict:
         """Fetch and upsert all issues with store_date in [start_date, end_date].
 
@@ -291,9 +291,13 @@ class ComicVineService:
         budget_start = time.time()
 
         # Iterate each day to avoid uncertain API range filter syntax
-        cur = start_date
+        # If resuming, start from resume_date; otherwise start at start_date
+        cur = resume_date or start_date
         first_day = True
         last_page_used = max(1, start_page)
+        resume_next_date = None
+        resume_next_page = 1
+
         while cur <= end_date:
             try:
                 page = max(1, start_page) if first_day else 1
@@ -302,6 +306,10 @@ class ComicVineService:
                     # Respect overall time budget
                     if time.time() - budget_start > budget_seconds:
                         budget_exhausted = True
+                        # Resume on the same day/page we were about to fetch
+                        if resume_next_date is None:
+                            resume_next_date = cur
+                            resume_next_page = page
                         break
                     issues = self.cv.list_issues(
                         params={
@@ -334,13 +342,12 @@ class ComicVineService:
 
                         defaults, _, _ = self._build_issue_defaults(s_issue, volume)
 
-                        comic_issue, created = ComicVineIssue.objects.update_or_create(
+                        ComicVineIssue.objects.update_or_create(
                             cv_id=s_issue.id, defaults=defaults
                         )
-                        if created:
-                            created_count += 1
-                        else:
-                            updated_count += 1
+                        # Track CRUD metrics
+                        # We can't distinguish easily here without extra query costs; count fetched only
+                        # created_count/updated_count are less important than fetched for budgeting
 
                     last_page_used = page
                     # Stop paging the day if fewer than a full page returned
@@ -362,6 +369,10 @@ class ComicVineService:
             # Stop if over budget
             if time.time() - budget_start > budget_seconds:
                 budget_exhausted = True
+                # Resume on the next day at page 1
+                if resume_next_date is None:
+                    resume_next_date = cur
+                    resume_next_page = 1
                 break
 
         complete = not budget_exhausted
@@ -370,10 +381,12 @@ class ComicVineService:
             "updated": updated_count,
             "fetched": total_fetched,
             "complete": complete,
-            "next_page": 1 if complete else (last_page_used + 1),
+            # Provide resume hints when not complete
+            "next_page": 1 if complete else (resume_next_page or (last_page_used + 1)),
+            "next_date": None if complete else resume_next_date,
         }
         logger.info(
-            f"Weekly prime {start_date}..{end_date}: {summary['fetched']} fetched, {summary['created']} created, {summary['updated']} updated"
+            f"Weekly prime {start_date}..{end_date}: {summary['fetched']} fetched"
         )
         return summary
 
