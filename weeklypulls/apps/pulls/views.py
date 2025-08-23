@@ -1,4 +1,5 @@
 from django.http import Http404
+import logging
 from django.db.models import Q, F
 from django.db.models.functions import Coalesce
 from rest_framework.mixins import CreateModelMixin
@@ -17,6 +18,8 @@ from django.utils import timezone
 from weeklypulls.apps.base.filters import IsOwnerFilterBackend
 from weeklypulls.apps.pull_lists.models import PullList
 from weeklypulls.apps.pulls.permissions import IsPullListOwner
+
+logger = logging.getLogger(__name__)
 
 
 class PullSerializer(serializers.HyperlinkedModelSerializer):
@@ -300,20 +303,16 @@ class PullViewSet(viewsets.ModelViewSet):
 
 
 class WeeksViewSet(viewsets.ViewSet):
-    """Discovery: return ALL issues for a specific week (store_date).
-
-    This endpoint is not limited to the user's existing pulls. It is intended
-    to help users discover new series releasing that week and optionally create
-    new pulls for them.
-    """
-
-    permission_classes = (IsAuthenticated,)
-
     def retrieve(self, request, pk=None):
         # Expect pk as YYYY-MM-DD; compute Monday-Sunday range for that week
+        req_id = request.META.get("HTTP_X_REQUEST_ID")
+        logger.info("WeeksViewSet.retrieve start week=%s req_id=%s", pk, req_id)
         try:
             target_date = datetime.strptime(pk, "%Y-%m-%d").date()
         except Exception:
+            logger.warning(
+                "WeeksViewSet.retrieve invalid date pk=%s req_id=%s", pk, req_id
+            )
             return Response(
                 {"detail": "Invalid date. Expected YYYY-MM-DD."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -341,10 +340,24 @@ class WeeksViewSet(viewsets.ViewSet):
                 or not getattr(week_cache, "priming_complete", False)
             )
 
+            logger.info(
+                "WeeksViewSet.retrieve prime check week=%s should_prime=%s has_cache=%s req_id=%s",
+                week_key,
+                should_prime,
+                bool(week_cache),
+                req_id,
+            )
+
             if should_prime:
                 try:
                     summary = ComicVineService().prime_issues_for_date_range(
                         start_date, end_date
+                    )
+                    logger.info(
+                        "WeeksViewSet.retrieve primed week=%s summary=%s req_id=%s",
+                        week_key,
+                        summary,
+                        req_id,
                     )
                     # Mark or update cache entry; use shorter TTL when incomplete to retry soon
                     if not week_cache:
@@ -361,6 +374,11 @@ class WeeksViewSet(viewsets.ViewSet):
                     week_cache.save()
                 except Exception:
                     # Non-fatal; still try to serve from DB and mark failure
+                    logger.exception(
+                        "WeeksViewSet.retrieve prime error week=%s req_id=%s",
+                        week_key,
+                        req_id,
+                    )
                     if not week_cache:
                         week_cache = ComicVineWeek(week_start=week_key)
                     week_cache.mark_api_failure()
@@ -375,6 +393,17 @@ class WeeksViewSet(viewsets.ViewSet):
             )
             .only(*ISSUE_BASE_ONLY_FIELDS, "site_url")
             .order_by("store_date", "volume__name", "number")
+        )
+        try:
+            issues_count = issues.count()
+        except Exception:
+            issues_count = -1
+        logger.info(
+            "WeeksViewSet.retrieve query week=%s..%s count=%s req_id=%s",
+            start_date,
+            end_date,
+            issues_count,
+            req_id,
         )
 
         # Build mapping of series -> user's Pull (preferring the one with fewest reads if duplicates exist)
@@ -391,24 +420,33 @@ class WeeksViewSet(viewsets.ViewSet):
                 series_to_pull[pull.series_id] = (rc, pull)
 
         comics = []
-        for issue in issues:
-            base = issue_to_week_comic(issue)
-            series_id = int(base["series_id"]) if base.get("series_id") else None
-            pull_tuple = series_to_pull.get(series_id)
-            if pull_tuple:
-                _rc, pull = pull_tuple
-                read_set = set(pull.read or [])
-                is_read = int(base["id"]) in read_set
-                base.update(
-                    {
-                        "pull_id": str(pull.id),
-                        "pulled": True,
-                        "read": is_read,
-                    }
-                )
-            else:
-                base.update({"pull_id": None, "pulled": False, "read": False})
-            comics.append(base)
+        try:
+            for issue in issues:
+                base = issue_to_week_comic(issue)
+                series_id = int(base["series_id"]) if base.get("series_id") else None
+                pull_tuple = series_to_pull.get(series_id)
+                if pull_tuple:
+                    _rc, pull = pull_tuple
+                    read_set = set(pull.read or [])
+                    is_read = int(base["id"]) in read_set
+                    base.update(
+                        {
+                            "pull_id": str(pull.id),
+                            "pulled": True,
+                            "read": is_read,
+                        }
+                    )
+                else:
+                    base.update({"pull_id": None, "pulled": False, "read": False})
+                comics.append(base)
+        except Exception:
+            logger.exception(
+                "WeeksViewSet.retrieve build payload error week=%s..%s req_id=%s",
+                start_date,
+                end_date,
+                req_id,
+            )
+            raise
 
         serializer = WeekSerializer({"week_of": start_date, "comics": comics})
         return Response(serializer.data, status=status.HTTP_200_OK)
