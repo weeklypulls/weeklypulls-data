@@ -381,6 +381,9 @@ class WeeksViewSet(viewsets.ViewSet):
                     )
                     if not week_cache:
                         week_cache = ComicVineWeek(week_start=week_key)
+                    # Ensure cache_expires has a value to satisfy NOT NULL
+                    if not getattr(week_cache, "cache_expires", None):
+                        week_cache.cache_expires = timezone.now() + timedelta(minutes=5)
                     week_cache.mark_api_failure()
                     week_cache.save()
 

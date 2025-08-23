@@ -28,14 +28,12 @@ class ComicVineCacheModel(models.Model):
         self.api_fetch_failed = True
         self.api_fetch_failure_count += 1
         self.api_last_failure = timezone.now()
-        self.save()
 
     def reset_api_failure(self):
         """Reset API failure status"""
         self.api_fetch_failed = False
         self.api_fetch_failure_count = 0
         self.api_last_failure = None
-        self.save()
 
 
 class ComicVinePublisher(models.Model):
