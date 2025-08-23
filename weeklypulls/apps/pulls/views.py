@@ -18,7 +18,6 @@ from django.utils import timezone
 from weeklypulls.apps.base.filters import IsOwnerFilterBackend
 from weeklypulls.apps.pull_lists.models import PullList
 from weeklypulls.apps.pulls.permissions import IsPullListOwner
-from weeklypulls.apps.base.annotations import with_sort_date
 
 try:
     import django_filters  # type: ignore
@@ -28,7 +27,7 @@ except Exception:  # pragma: no cover - optional in dev before deps installed
 if django_filters is not None:
 
     class IssueFilter(django_filters.FilterSet):
-        since = django_filters.DateFilter(field_name="sort_date", lookup_expr="gte")
+        since = django_filters.DateFilter(field_name="date", lookup_expr="gte")
         series_id = django_filters.NumberFilter(field_name="volume__cv_id")
 
         class Meta:
@@ -308,7 +307,7 @@ class PullViewSet(viewsets.ModelViewSet):
         base_qs = ComicVineIssue.objects.filter(unread_conditions).select_related(
             "volume"
         )
-        unread_issues = with_issue_image_annotation(with_sort_date(base_qs)).only(
+        unread_issues = with_issue_image_annotation(base_qs).only(
             *ISSUE_BASE_ONLY_FIELDS, "site_url"
         )
         # Apply django-filter (since/series_id) and ordering
@@ -432,18 +431,15 @@ class WeeksViewSet(viewsets.ViewSet):
         base_week_qs = ComicVineIssue.objects.filter(
             date__gte=start_date, date__lte=end_date
         ).select_related("volume")
-        week_qs = with_issue_image_annotation(with_sort_date(base_week_qs)).only(
+        week_qs = with_issue_image_annotation(base_week_qs).only(
             *ISSUE_BASE_ONLY_FIELDS, "site_url"
         )
-        # Ordering: date alias maps to sort_date
+        # Ordering: date alias maps to canonical date
         ordering_param = request.query_params.get("ordering") or "date"
         if ordering_param == "-date":
-            order_tuple = ("-sort_date", "-volume__name", "-number")
-        elif ordering_param == "date":
-            order_tuple = ("sort_date", "volume__name", "number")
+            order_tuple = ("-date", "-volume__name", "-number")
         else:
-            # fallback to default ascending by date
-            order_tuple = ("sort_date", "volume__name", "number")
+            order_tuple = ("date", "volume__name", "number")
         week_qs = week_qs.order_by(*order_tuple)
         # Limit results to keep payloads reasonable
         try:
@@ -528,22 +524,22 @@ class SeriesViewSet(viewsets.ViewSet):
 
         # Fetch issues for this volume with standard sort/filter
         base_series_qs = ComicVineIssue.objects.filter(volume__cv_id=volume.cv_id)
-        series_qs = with_issue_image_annotation(with_sort_date(base_series_qs)).only(
+        series_qs = with_issue_image_annotation(base_series_qs).only(
             *ISSUE_BASE_ONLY_FIELDS, "site_url"
         )
         # Filters: since
         try:
             since = request.query_params.get("since")
             if since:
-                series_qs = series_qs.filter(sort_date__gte=since)
+                series_qs = series_qs.filter(date__gte=since)
         except Exception:
             pass
         # Ordering
         ordering_param = request.query_params.get("ordering") or "date"
         if ordering_param == "-date":
-            order_tuple = ("-sort_date", "-number")
+            order_tuple = ("-date", "-number")
         else:
-            order_tuple = ("sort_date", "number")
+            order_tuple = ("date", "number")
         series_qs = series_qs.order_by(*order_tuple)
         # Limit
         try:
