@@ -241,7 +241,6 @@ class ComicVineService:
                         "number": s_issue.number,
                         "name": s_issue.name,
                         "date_added": date_added,
-                        "store_date": store_date,
                     }
                 )
 
@@ -492,6 +491,8 @@ class ComicVineService:
             "name": getattr(s_issue, "name", None),
             "number": getattr(s_issue, "number", None),
             "volume": volume,
+            # canonical sale date
+            "date": store_date or cover_date,
             "store_date": store_date,
             "cover_date": cover_date,
             "description": getattr(s_issue, "description", None),

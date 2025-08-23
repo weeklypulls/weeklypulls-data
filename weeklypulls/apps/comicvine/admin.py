@@ -93,12 +93,11 @@ class ComicVineIssueAdmin(admin.ModelAdmin):
         "issue_display",
         "volume_name",
         "number",
-        "store_date",
-        "cover_date",
+        "date",
         "last_updated",
         "is_cache_expired",
     )
-    list_filter = ("store_date", "cover_date", "volume__start_year", "api_fetch_failed")
+    list_filter = ("date", "volume__start_year", "api_fetch_failed")
     search_fields = ("name", "cv_id", "volume__name", "number", "description")
     readonly_fields = (
         "last_updated",
@@ -107,14 +106,11 @@ class ComicVineIssueAdmin(admin.ModelAdmin):
         "cover_image",
     )
     raw_id_fields = ("volume",)
-    date_hierarchy = "store_date"
+    date_hierarchy = "date"
 
     fieldsets = (
         ("Basic Info", {"fields": ("cv_id", "name", "number", "volume")}),
-        (
-            "Dates",
-            {"fields": ("store_date", "cover_date", "date_added", "date_last_updated")},
-        ),
+        ("Dates", {"fields": ("date", "date_added", "date_last_updated")}),
         ("Content", {"fields": ("description", "summary", "aliases")}),
         (
             "Images",

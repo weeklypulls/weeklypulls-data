@@ -81,8 +81,7 @@ class UnreadIssueSerializer(serializers.ModelSerializer):
             "cv_id",
             "name",
             "number",
-            "store_date",
-            "cover_date",
+            "date",
             "volume_id",
             "volume_name",
             "volume_start_year",
@@ -135,8 +134,7 @@ ISSUE_BASE_ONLY_FIELDS = (
     "cv_id",
     "name",
     "number",
-    "store_date",
-    "cover_date",
+    "date",
     "description",
     *IMAGE_FIELD_CANDIDATES,
     "volume__cv_id",
@@ -151,10 +149,13 @@ def with_issue_image_annotation(qs):
 
 
 ALLOWED_UNREAD_ORDERINGS = {
-    "store_date": ("-store_date", "-cover_date"),  # default grouping (newest first)
-    "-store_date": ("-store_date", "-cover_date"),
-    "cover_date": ("-cover_date", "-store_date"),
-    "-cover_date": ("-cover_date", "-store_date"),
+    # Prefer canonical date; legacy params map to the same
+    "date": ("-date",),
+    "-date": ("-date",),
+    "store_date": ("-date",),
+    "-store_date": ("-date",),
+    "cover_date": ("-date",),
+    "-cover_date": ("-date",),
 }
 
 
@@ -169,13 +170,12 @@ def issue_to_week_comic(issue):
     payload = {
         "id": str(issue.cv_id),
         "images": images,
-        "on_sale": issue.store_date,
+        # Use canonical date for client display
+        "on_sale": getattr(issue, "date", None),
         "series_id": str(getattr(issue.volume, "cv_id", "")),
         "title": title,
     }
     # Optional extras if available on the instance
-    if hasattr(issue, "cover_date"):
-        payload["cover_date"] = getattr(issue, "cover_date", None)
     if hasattr(issue, "site_url"):
         payload["site_url"] = getattr(issue, "site_url", None)
     if hasattr(issue, "description"):
@@ -239,12 +239,12 @@ class PullViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"])
     def unread_issues(self, request):
         """
-        Return all unread issues for the authenticated user's pull lists.
+            Return all unread issues for the authenticated user's pull lists.
 
-        This endpoint finds all ComicVine issues that:
-        1. Belong to series in the user's pull lists
-        2. Are not in the 'read' array of the corresponding Pull
-        3. Are ordered by store_date (newest first)
+            This endpoint finds all ComicVine issues that:
+            1. Belong to series in the user's pull lists
+            2. Are not in the 'read' array of the corresponding Pull
+        3. Are ordered by date (newest first)
         """
         # Get user's pull lists with prefetch for efficiency
         user_pulls = (
@@ -278,11 +278,9 @@ class PullViewSet(viewsets.ModelViewSet):
 
             unread_conditions |= series_condition
 
-        # Determine ordering preference (default: newest store_date first)
+        # Determine ordering preference (default: newest date first)
         ordering_param = request.query_params.get("ordering")
-        order_tuple = ALLOWED_UNREAD_ORDERINGS.get(
-            ordering_param or "store_date", ("-store_date", "-cover_date")
-        )
+        order_tuple = ALLOWED_UNREAD_ORDERINGS.get(ordering_param or "date", ("-date",))
 
         unread_issues = (
             with_issue_image_annotation(
@@ -404,11 +402,11 @@ class WeeksViewSet(viewsets.ViewSet):
         issues = (
             with_issue_image_annotation(
                 ComicVineIssue.objects.filter(
-                    store_date__gte=start_date, store_date__lte=end_date
+                    date__gte=start_date, date__lte=end_date
                 ).select_related("volume")
             )
             .only(*ISSUE_BASE_ONLY_FIELDS, "site_url")
-            .order_by("store_date", "volume__name", "number")
+            .order_by("date", "volume__name", "number")
         )
         try:
             issues_count = issues.count()
@@ -490,7 +488,7 @@ class SeriesViewSet(viewsets.ViewSet):
                 ComicVineIssue.objects.filter(volume__cv_id=volume.cv_id)
             )
             .only(*ISSUE_BASE_ONLY_FIELDS, "site_url")
-            .order_by("store_date", "number")
+            .order_by("date", "number")
         )
 
         comics = [issue_to_week_comic(issue) for issue in issues]

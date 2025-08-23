@@ -88,6 +88,8 @@ class ComicVineIssue(ComicVineCacheModel):
     )  # Issue number (can be alphanumeric)
 
     # Dates
+    # Canonical on-sale date used across the app (coalesce of store/cover)
+    date = models.DateField(null=True, blank=True)
     cover_date = models.DateField(null=True, blank=True)  # Date on the cover
     store_date = models.DateField(null=True, blank=True)  # Date went on sale
 
@@ -121,11 +123,11 @@ class ComicVineIssue(ComicVineCacheModel):
     class Meta:
         db_table = "comicvine_issues"
         verbose_name_plural = "ComicVine Issues"
-        ordering = ["volume", "store_date", "cover_date", "number"]
+        ordering = ["volume", "date", "number"]
         indexes = [
-            models.Index(fields=["volume", "store_date"]),
+            models.Index(fields=["volume", "date"]),
             models.Index(fields=["volume", "number"]),
-            models.Index(fields=["store_date"]),
+            models.Index(fields=["date"]),
         ]
 
     def __str__(self):
