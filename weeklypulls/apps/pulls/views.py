@@ -121,8 +121,17 @@ class WeekSerializer(serializers.Serializer):
 
 """Common helpers for issue querying / serialization"""
 
-# For now, only send the original image URL to the frontend
-IMAGE_FIELD_CANDIDATES = ("image_original_url",)
+# Image resolution preference order (first non-null wins)
+IMAGE_FIELD_CANDIDATES = (
+    "image_medium_url",
+    "image_super_url",
+    "image_original_url",
+    "image_screen_url",
+    "image_small_url",
+    "image_thumbnail_url",
+    "image_tiny_url",
+    "image_icon_url",
+)
 
 # Minimal fields required for unread issues endpoint (with volume context)
 ISSUE_BASE_ONLY_FIELDS = (
@@ -154,9 +163,17 @@ ALLOWED_UNREAD_ORDERINGS = {
 
 
 def _images_from_issue(issue):
-    """Return a single-element list with the original image URL when available."""
-    original = getattr(issue, "image_original_url", None)
-    return [original] if original else []
+    """Return images list in preference order (first is best)."""
+    images = []
+    # Prefer annotated image_url first if present
+    image = getattr(issue, "image_url", None)
+    if image:
+        images.append(image)
+    for field in IMAGE_FIELD_CANDIDATES:
+        val = getattr(issue, field, None)
+        if val and val not in images:
+            images.append(val)
+    return images
 
 
 def issue_to_iissue(issue, pull=None):
