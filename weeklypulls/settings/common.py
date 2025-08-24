@@ -148,3 +148,46 @@ COMICVINE_API_KEY = os.getenv("COMICVINE_API_KEY", "")
 COMICVINE_API_BASE_URL = "https://comicvine.gamespot.com/api"
 COMICVINE_RATE_LIMIT_PER_HOUR = 200  # ComicVine's strict limit
 COMICVINE_CACHE_EXPIRE_HOURS = 24  # How long to cache data
+
+# Logging: ensure all 500 errors are printed to console
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        },
+        "simple": {"format": "%(levelname)s %(message)s"},
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        }
+    },
+    "loggers": {
+        # Core Django logs
+        "django": {
+            "handlers": ["console"],
+            "level": os.getenv("DJANGO_LOG_LEVEL", "INFO"),
+            "propagate": True,
+        },
+        # Request/response errors (includes full tracebacks for 500s)
+        "django.request": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        # Useful when running under gunicorn
+        "gunicorn.error": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "gunicorn.access": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
