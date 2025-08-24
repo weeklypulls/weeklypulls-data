@@ -119,11 +119,10 @@ class UnreadIssueSerializer(serializers.ModelSerializer):
 class WeekComicSerializer(serializers.Serializer):
     id = serializers.CharField()
     images = serializers.ListField(child=serializers.CharField())
-    on_sale = serializers.DateField()
+    date = serializers.DateField()
     series_id = serializers.CharField()
     title = serializers.CharField()
     # Optional extended fields for detail pages
-    cover_date = serializers.DateField(required=False, allow_null=True)
     site_url = serializers.CharField(required=False, allow_null=True)
     description = serializers.CharField(required=False, allow_null=True)
     # Optional pull context for the authenticated user
@@ -171,13 +170,9 @@ def with_issue_image_annotation(qs):
 
 
 ALLOWED_UNREAD_ORDERINGS = {
-    # Prefer canonical date; legacy params map to the same
-    "date": ("-date",),
+    # Canonical date only; 'date' = ascending, '-date' = descending
+    "date": ("date",),
     "-date": ("-date",),
-    "store_date": ("-date",),
-    "-store_date": ("-date",),
-    "cover_date": ("-date",),
-    "-cover_date": ("-date",),
 }
 
 
@@ -192,8 +187,8 @@ def issue_to_week_comic(issue):
     payload = {
         "id": str(issue.cv_id),
         "images": images,
-        # Use canonical date for client display
-        "on_sale": getattr(issue, "date", None),
+        # Canonical date for client display
+        "date": getattr(issue, "date", None),
         "series_id": str(getattr(issue.volume, "cv_id", "")),
         "title": title,
     }

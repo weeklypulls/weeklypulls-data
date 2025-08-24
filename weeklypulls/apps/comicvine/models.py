@@ -86,12 +86,7 @@ class ComicVineIssue(ComicVineCacheModel):
     number = models.CharField(
         max_length=50, null=True, blank=True
     )  # Issue number (can be alphanumeric)
-
-    # Dates
-    # Canonical on-sale date used across the app (coalesce of store/cover)
     date = models.DateField(null=True, blank=True)
-    cover_date = models.DateField(null=True, blank=True)  # Date on the cover
-    store_date = models.DateField(null=True, blank=True)  # Date went on sale
 
     # Volume relationship
     volume = models.ForeignKey(
