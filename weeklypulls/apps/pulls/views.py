@@ -30,10 +30,17 @@ if django_filters is not None:
     class IssueFilter(django_filters.FilterSet):
         since = django_filters.DateFilter(field_name="date", lookup_expr="gte")
         series_id = django_filters.NumberFilter(field_name="volume__cv_id")
+        search = django_filters.CharFilter(method="filter_search")
+
+        def filter_search(self, queryset, name, value):  # type: ignore[no-redef]
+            if not value:
+                return queryset
+            # Search by volume (series) name; case-insensitive partial match
+            return queryset.filter(volume__name__icontains=value)
 
         class Meta:
             model = ComicVineIssue
-            fields = ["since", "series_id"]
+            fields = ["since", "series_id", "search"]
 
 else:
     # Fallback no-op filter when django-filter isn't available yet
