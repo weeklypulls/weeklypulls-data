@@ -82,59 +82,41 @@ class PullSerializer(serializers.HyperlinkedModelSerializer):
         )
 
 
-class UnreadIssueSerializer(serializers.ModelSerializer):
-    """Serializer for unread ComicVine issues"""
-
-    volume_name = serializers.CharField(source="volume.name", read_only=True)
-    volume_start_year = serializers.IntegerField(
-        source="volume.start_year", read_only=True
-    )
-    volume_id = serializers.IntegerField(source="volume.cv_id", read_only=True)
-    pull_id = serializers.SerializerMethodField()
-    image_url = serializers.CharField(read_only=True)
-
-    def get_pull_id(self, obj):
-        mapping = self.context.get("series_to_pull", {}) or {}
-        series_id = getattr(getattr(obj, "volume", None), "cv_id", None)
-        return mapping.get(series_id)
-
-    class Meta:
-        model = ComicVineIssue
-        fields = (
-            "cv_id",
-            "name",
-            "number",
-            "date",
-            "volume_id",
-            "volume_name",
-            "volume_start_year",
-            "description",
-            "image_medium_url",
-            "image_url",
-            "site_url",
-            "pull_id",
-        )
-
-
-# New serializers for Weeks API
-class WeekComicSerializer(serializers.Serializer):
+class PublisherSerializer(serializers.Serializer):
     id = serializers.CharField()
-    images = serializers.ListField(child=serializers.CharField())
-    date = serializers.DateField()
-    series_id = serializers.CharField()
+    name = serializers.CharField()
+
+
+class IssueVolumeSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    name = serializers.CharField(required=False, allow_null=True)
+    start_year = serializers.IntegerField(required=False, allow_null=True)
+    publisher = PublisherSerializer(required=False, allow_null=True)
+
+
+class PullContextSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    pulled = serializers.BooleanField()
+    read = serializers.BooleanField()
+    pull_list_id = serializers.CharField(required=False, allow_null=True)
+
+
+class IIssueSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    number = serializers.CharField(required=False, allow_null=True)
+    name = serializers.CharField(required=False, allow_null=True)
     title = serializers.CharField()
-    # Optional extended fields for detail pages
+    date = serializers.DateField(required=False, allow_null=True)
+    images = serializers.ListField(child=serializers.CharField())
     site_url = serializers.CharField(required=False, allow_null=True)
     description = serializers.CharField(required=False, allow_null=True)
-    # Optional pull context for the authenticated user
-    pull_id = serializers.CharField(required=False, allow_null=True)
-    pulled = serializers.BooleanField(required=False, default=False)
-    read = serializers.BooleanField(required=False, default=False)
+    volume = IssueVolumeSerializer()
+    pull = PullContextSerializer(required=False, allow_null=True)
 
 
 class WeekSerializer(serializers.Serializer):
     week_of = serializers.DateField()
-    comics = WeekComicSerializer(many=True)
+    comics = IIssueSerializer(many=True)
 
 
 """Common helpers for issue querying / serialization"""
@@ -162,6 +144,9 @@ ISSUE_BASE_ONLY_FIELDS = (
     "volume__cv_id",
     "volume__name",
     "volume__start_year",
+    # publisher fields when available
+    "volume__publisher__cv_id",
+    "volume__publisher__name",
 )
 
 
@@ -177,28 +162,69 @@ ALLOWED_UNREAD_ORDERINGS = {
 }
 
 
-def issue_to_week_comic(issue):
-    """Map a ComicVineIssue (with volume and image_url annotated) to the week/series comic dict."""
-    vol_name = getattr(issue.volume, "name", "")
-    number = getattr(issue, "number", "")
-    title = f"{vol_name} #{number}".strip()
-    # Trust annotated image_url produced by with_issue_image_annotation
+def _images_from_issue(issue):
+    """Return images list in preference order (first is best)."""
+    images = []
+    # Prefer annotated image_url first if present
     image = getattr(issue, "image_url", None)
-    images = [image] if image else []
-    payload = {
-        "id": str(issue.cv_id),
-        "images": images,
-        # Canonical date for client display
-        "date": getattr(issue, "date", None),
-        "series_id": str(getattr(issue.volume, "cv_id", "")),
-        "title": title,
+    if image:
+        images.append(image)
+    for field in IMAGE_FIELD_CANDIDATES:
+        val = getattr(issue, field, None)
+        if val and val not in images:
+            images.append(val)
+    return images
+
+
+def issue_to_iissue(issue, pull=None):
+    """Map ComicVineIssue (+ optional Pull) to IIssue-shaped dict."""
+    vol = getattr(issue, "volume", None)
+    vol_name = getattr(vol, "name", "")
+    number = getattr(issue, "number", None)
+    title = (
+        f"{vol_name} #{number}".strip()
+        if vol_name or number
+        else (getattr(issue, "name", None) or "")
+    )
+
+    volume_payload = {
+        "id": str(getattr(vol, "cv_id", "")),
+        "name": getattr(vol, "name", None),
+        "start_year": getattr(vol, "start_year", None),
     }
-    # Optional extras if available on the instance
-    if hasattr(issue, "site_url"):
-        payload["site_url"] = getattr(issue, "site_url", None)
-    if hasattr(issue, "description"):
-        payload["description"] = getattr(issue, "description", None)
-    return payload
+    publisher = getattr(vol, "publisher", None)
+    if publisher:
+        volume_payload["publisher"] = {
+            "id": str(getattr(publisher, "cv_id", "")),
+            "name": getattr(publisher, "name", None),
+        }
+
+    pull_payload = None
+    if pull is not None:
+        read_set = set(pull.read or [])
+        pull_payload = {
+            "id": str(pull.id),
+            "pulled": True,
+            "read": int(getattr(issue, "cv_id", 0)) in read_set,
+            "pull_list_id": (
+                str(getattr(pull, "pull_list_id", ""))
+                if getattr(pull, "pull_list_id", None)
+                else None
+            ),
+        }
+
+    return {
+        "id": str(getattr(issue, "cv_id", "")),
+        "number": getattr(issue, "number", None),
+        "name": getattr(issue, "name", None),
+        "title": title,
+        "date": getattr(issue, "date", None),
+        "images": _images_from_issue(issue),
+        "site_url": getattr(issue, "site_url", None),
+        "description": getattr(issue, "description", None),
+        "volume": volume_payload,
+        "pull": pull_payload,
+    }
 
 
 class PullViewSet(viewsets.ModelViewSet):
@@ -268,7 +294,7 @@ class PullViewSet(viewsets.ModelViewSet):
         user_pulls = (
             Pull.objects.filter(pull_list__owner=request.user)
             .select_related("pull_list")
-            .only("id", "series_id", "read", "pull_list__owner")
+            .only("id", "series_id", "read", "pull_list_id", "pull_list__owner")
         )
 
         if not user_pulls.exists():
@@ -305,7 +331,8 @@ class PullViewSet(viewsets.ModelViewSet):
         order_tuple = ALLOWED_UNREAD_ORDERINGS.get(ordering_param or "date", ("-date",))
 
         base_qs = ComicVineIssue.objects.filter(unread_conditions).select_related(
-            "volume"
+            "volume",
+            "volume__publisher",
         )
         unread_issues = with_issue_image_annotation(base_qs).only(
             *ISSUE_BASE_ONLY_FIELDS, "site_url"
@@ -317,12 +344,24 @@ class PullViewSet(viewsets.ModelViewSet):
         paginator = StandardResultsPagination()
         page = paginator.paginate_queryset(qs, request)
 
-        # Collapse mapping to series_id -> pull_id
-        series_to_pull_ids = {k: v[1] for k, v in series_to_pull.items()}
-        serializer = UnreadIssueSerializer(
-            page, many=True, context={"series_to_pull": series_to_pull_ids}
-        )
-        return paginator.get_paginated_response(serializer.data)
+        # Build IIssue-shaped results with minimal pull context (unread => read: False)
+        pulls_by_id = {p.id: p for p in user_pulls}
+        results = []
+        for issue in page:
+            series_id = getattr(getattr(issue, "volume", None), "cv_id", None)
+            pull_tuple = series_to_pull.get(series_id)
+            selected_pull = pulls_by_id.get(pull_tuple[1]) if pull_tuple else None
+            # For unread endpoint, we can pass the Pull for context or minimal context if not found
+            payload = issue_to_iissue(issue, pull=selected_pull)
+            if payload.get("pull") is None and pull_tuple:
+                payload["pull"] = {
+                    "id": str(pull_tuple[1]),
+                    "pulled": True,
+                    "read": False,
+                }
+            results.append(payload)
+
+        return paginator.get_paginated_response(results)
 
 
 class WeeksViewSet(viewsets.ViewSet):
@@ -426,7 +465,7 @@ class WeeksViewSet(viewsets.ViewSet):
         # Discovery mode: return ALL issues in the Monday–Sunday range (inclusive)
         base_week_qs = ComicVineIssue.objects.filter(
             date__gte=start_date, date__lte=end_date
-        ).select_related("volume")
+        ).select_related("volume", "volume__publisher")
         week_qs = with_issue_image_annotation(base_week_qs).only(
             *ISSUE_BASE_ONLY_FIELDS, "site_url"
         )
@@ -459,7 +498,7 @@ class WeeksViewSet(viewsets.ViewSet):
         # Build mapping of series -> user's Pull (preferring the one with fewest reads if duplicates exist)
         user_pulls = (
             Pull.objects.filter(pull_list__owner=request.user)
-            .only("id", "series_id", "read", "pull_list__owner")
+            .only("id", "series_id", "read", "pull_list_id", "pull_list__owner")
             .select_related("pull_list")
         )
         series_to_pull = {}
@@ -472,23 +511,12 @@ class WeeksViewSet(viewsets.ViewSet):
         comics = []
         try:
             for issue in issues:
-                base = issue_to_week_comic(issue)
-                series_id = int(base["series_id"]) if base.get("series_id") else None
+                # Choose appropriate pull (if any) for this series
+                series_id = getattr(getattr(issue, "volume", None), "cv_id", None)
                 pull_tuple = series_to_pull.get(series_id)
-                if pull_tuple:
-                    _rc, pull = pull_tuple
-                    read_set = set(pull.read or [])
-                    is_read = int(base["id"]) in read_set
-                    base.update(
-                        {
-                            "pull_id": str(pull.id),
-                            "pulled": True,
-                            "read": is_read,
-                        }
-                    )
-                else:
-                    base.update({"pull_id": None, "pulled": False, "read": False})
-                comics.append(base)
+                pull = pull_tuple[1] if pull_tuple else None
+                payload = issue_to_iissue(issue, pull=pull)
+                comics.append(payload)
         except Exception:
             logger.exception(
                 "WeeksViewSet.retrieve build payload error week=%s..%s req_id=%s",
@@ -505,7 +533,7 @@ class WeeksViewSet(viewsets.ViewSet):
 class SeriesSerializer(serializers.Serializer):
     series_id = serializers.CharField()
     title = serializers.CharField()
-    comics = WeekComicSerializer(many=True)
+    comics = IIssueSerializer(many=True)
 
 
 class SeriesViewSet(viewsets.ViewSet):
@@ -545,7 +573,7 @@ class SeriesViewSet(viewsets.ViewSet):
         limit = max(1, min(2000, limit))
         issues = series_qs[:limit]
 
-        comics = [issue_to_week_comic(issue) for issue in issues]
+        comics = [issue_to_iissue(issue) for issue in issues]
 
         series_payload = {
             "series_id": str(volume.cv_id),
