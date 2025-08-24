@@ -163,17 +163,17 @@ ALLOWED_UNREAD_ORDERINGS = {
 
 
 def _images_from_issue(issue):
-    """Return images list in preference order (first is best)."""
-    images = []
-    # Prefer annotated image_url first if present
+    """Return a single best image URL using the annotation or first non-null fallback."""
+    # Prefer the annotated unified image if present
     image = getattr(issue, "image_url", None)
     if image:
-        images.append(image)
+        return [image]
+    # Fallback to the first non-null candidate
     for field in IMAGE_FIELD_CANDIDATES:
         val = getattr(issue, field, None)
-        if val and val not in images:
-            images.append(val)
-    return images
+        if val:
+            return [val]
+    return []
 
 
 def issue_to_iissue(issue, pull=None):
