@@ -18,6 +18,7 @@ from django.utils import timezone
 from weeklypulls.apps.base.filters import IsOwnerFilterBackend
 from weeklypulls.apps.pull_lists.models import PullList
 from weeklypulls.apps.pulls.permissions import IsPullListOwner
+from weeklypulls.settings.pagination import StandardResultsPagination
 
 try:
     import django_filters  # type: ignore
@@ -271,7 +272,11 @@ class PullViewSet(viewsets.ModelViewSet):
         )
 
         if not user_pulls.exists():
-            return Response([], status=status.HTTP_200_OK)
+            # Return empty paginated envelope for consistency with DRF pagination responses
+            return Response(
+                {"count": 0, "next": None, "previous": None, "results": []},
+                status=status.HTTP_200_OK,
+            )
 
         # Build query for unread issues more efficiently
         unread_conditions = Q()
@@ -308,20 +313,16 @@ class PullViewSet(viewsets.ModelViewSet):
         # Apply django-filter (since/series_id) and ordering
         filterset = IssueFilter(request.GET, queryset=unread_issues)
         qs = filterset.qs.order_by(*order_tuple)
-        # Apply simple limit param but keep response as a plain list (no envelope)
-        try:
-            limit = int(request.query_params.get("limit", "50"))
-        except Exception:
-            limit = 50
-        limit = max(1, min(200, limit))
-        qs = qs[:limit]
+        # Paginate using DRF paginator (envelope: count/next/previous/results)
+        paginator = StandardResultsPagination()
+        page = paginator.paginate_queryset(qs, request)
 
         # Collapse mapping to series_id -> pull_id
         series_to_pull_ids = {k: v[1] for k, v in series_to_pull.items()}
         serializer = UnreadIssueSerializer(
-            qs, many=True, context={"series_to_pull": series_to_pull_ids}
+            page, many=True, context={"series_to_pull": series_to_pull_ids}
         )
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return paginator.get_paginated_response(serializer.data)
 
 
 class WeeksViewSet(viewsets.ViewSet):
