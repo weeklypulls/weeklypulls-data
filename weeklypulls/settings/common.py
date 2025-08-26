@@ -134,11 +134,19 @@ CACHE_MIDDLEWARE_KEY_PREFIX = "wps_"
 
 # email config
 DEFAULT_FROM_EMAIL = "WeeklyPulls <staff@weeklypulls.com>"
+# Disable actual email sending by default; override via EMAIL_BACKEND env var when ready
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
+)
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.sendgrid.net")
 EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 EMAIL_PORT = int(os.environ.get("EMAIL_PORT", 587))
 EMAIL_USE_TLS = bool(os.environ.get("EMAIL_USE_TLS", True))
+
+# Allauth/dj-rest-auth: turn off email verification while email is disabled
+ACCOUNT_EMAIL_REQUIRED = False
+ACCOUNT_EMAIL_VERIFICATION = "none"
 
 # location of weeklypulls-marvel (deprecated)
 MAPI_URL = os.getenv("MAPI_URL", "https://weeklypulls-marvel.herokuapp.com")
