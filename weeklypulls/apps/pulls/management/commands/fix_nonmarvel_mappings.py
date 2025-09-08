@@ -1,4 +1,5 @@
 import sys
+import time
 from typing import Iterable, List, Optional, Tuple
 
 from django.core.management.base import BaseCommand, CommandParser
@@ -15,6 +16,7 @@ from weeklypulls.apps.comicvine.services import ComicVineService
 
 
 MARVEL_PUBLISHER_ID = 31
+SLEEP_SECONDS = 30  # fixed delay between ComicVine API calls to avoid rate limits
 
 
 class Command(BaseCommand):
@@ -87,6 +89,7 @@ class Command(BaseCommand):
             summary["considered"] += 1
             # Always refresh volume from API to avoid stale/foreign cached data
             vol = svc.get_volume(sid, force_refresh=True)
+            self._sleep()
             if not vol:
                 self.stdout.write(
                     self.style.WARNING(f"Series {sid}: volume not found; skipping")
@@ -115,7 +118,9 @@ class Command(BaseCommand):
 
             # Ensure Marvel volume is cached and issues are present
             marvel_vol = svc.get_volume(marvel_id, force_refresh=True)
+            self._sleep()
             svc.get_volume_issues(marvel_id)  # upsert issues for the volume
+            self._sleep()
             issue_ids = list(
                 ComicVineIssue.objects.filter(volume_id=marvel_id).values_list(
                     "cv_id", flat=True
@@ -227,6 +232,7 @@ class Command(BaseCommand):
                 params["filter"] += f",start_year:{year}"
             params["sort"] = "count_of_issues:desc"
             results = svc.cv.list_volumes(params=params) or []
+            self._sleep()
         except Exception:
             results = []
 
@@ -265,3 +271,10 @@ class Command(BaseCommand):
         candidates.sort(key=lambda c: (c[3] or 0), reverse=True)
         best = candidates[0]
         return (best[0], best[1], best[2])
+
+    def _sleep(self):
+        """Sleep a fixed amount between API calls for rate limiting."""
+        try:
+            time.sleep(SLEEP_SECONDS)
+        except Exception:
+            pass
