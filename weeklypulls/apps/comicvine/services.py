@@ -96,41 +96,8 @@ class ComicVineService:
             # Log successful API call
             logger.info(f"API SUCCESS: volume/{volume_id} - {response_time_ms}ms")
 
-            # Create or update volume
-            if not volume:
-                volume = ComicVineVolume(cv_id=volume_id)
-
-            # Explicit attribute access (fail fast if Simyan API changes)
-            volume.name = cv_volume.name or f"Volume {volume_id}"
-            volume.start_year = cv_volume.start_year
-            volume.count_of_issues = (
-                cv_volume.issue_count or 0
-            )  # Simyan uses issue_count
-            # Publisher (FK) — create/update lightweight publisher row and link
-            try:
-                pub = getattr(cv_volume, "publisher", None)
-                pub_id = getattr(pub, "id", None) if pub else None
-                pub_name = getattr(pub, "name", None) if pub else None
-                if pub_id is not None:
-                    publisher_obj, _ = ComicVinePublisher.objects.get_or_create(
-                        cv_id=pub_id,
-                        defaults={"name": pub_name or f"Publisher {pub_id}"},
-                    )
-                    if pub_name and publisher_obj.name != pub_name:
-                        publisher_obj.name = pub_name
-                        publisher_obj.save(update_fields=["name"])
-                    volume.publisher = publisher_obj
-                else:
-                    volume.publisher = None
-            except Exception:
-                volume.publisher = None
-            volume.cache_expires = timezone.now() + timedelta(
-                hours=self.cache_expire_hours
-            )
-
-            # Reset failure status on successful fetch
-            volume.reset_api_failure()
-            volume.save()
+            # Normalize/update volume via helper
+            volume = self._apply_cv_volume_payload(volume, cv_volume)
 
             logger.info(f"Successfully cached volume {volume_id}: {volume.name}")
             return volume
@@ -435,37 +402,16 @@ class ComicVineService:
             volume = ComicVineVolume.objects.get(cv_id=vol_id)
             # Backfill publisher FK if available and missing
             if publisher and not getattr(volume, "publisher", None):
-                from .models import ComicVinePublisher as _CVP
-
-                pub_id = publisher.get("id")
-                pub_name = publisher.get("name")
-                if pub_id is not None:
-                    publisher_obj, _ = _CVP.objects.get_or_create(
-                        cv_id=pub_id,
-                        defaults={"name": pub_name or f"Publisher {pub_id}"},
-                    )
-                    if pub_name and publisher_obj.name != pub_name:
-                        publisher_obj.name = pub_name
-                        publisher_obj.save(update_fields=["name"])
-                    volume.publisher = publisher_obj
+                pub_obj = self._get_or_create_publisher(publisher)
+                if pub_obj:
+                    volume.publisher = pub_obj
                     volume.save(update_fields=["publisher"])
             return volume
         except ComicVineVolume.DoesNotExist:
             # Create publisher if provided
-            publisher_obj = None
-            if publisher:
-                from .models import ComicVinePublisher as _CVP
-
-                pub_id = publisher.get("id")
-                pub_name = publisher.get("name")
-                if pub_id is not None:
-                    publisher_obj, _ = _CVP.objects.get_or_create(
-                        cv_id=pub_id,
-                        defaults={"name": pub_name or f"Publisher {pub_id}"},
-                    )
-                    if pub_name and publisher_obj.name != pub_name:
-                        publisher_obj.name = pub_name
-                        publisher_obj.save(update_fields=["name"])
+            publisher_obj = (
+                self._get_or_create_publisher(publisher) if publisher else None
+            )
             volume = ComicVineVolume(
                 cv_id=vol_id,
                 name=vol_name or f"Volume {vol_id}",
@@ -517,3 +463,63 @@ class ComicVineService:
             "image_original_url": self._get_img(img, "original_url"),
         }
         return defaults, store_date, date_added
+
+    # -------------------------
+    # Standardization helpers
+    # -------------------------
+    def _get_or_create_publisher(self, payload: Optional[dict]):
+        """Given a raw publisher payload {id, name}, return a ComicVinePublisher or None."""
+        if not payload:
+            return None
+        pub_id = payload.get("id") if isinstance(payload, dict) else None
+        pub_name = payload.get("name") if isinstance(payload, dict) else None
+        if pub_id is None:
+            return None
+        try:
+            publisher_obj, created = ComicVinePublisher.objects.get_or_create(
+                cv_id=pub_id, defaults={"name": pub_name or f"Publisher {pub_id}"}
+            )
+            if pub_name and publisher_obj.name != pub_name:
+                publisher_obj.name = pub_name
+                publisher_obj.save(update_fields=["name"])
+            return publisher_obj
+        except Exception:
+            return None
+
+    def _apply_cv_volume_payload(
+        self, volume: Optional[ComicVineVolume], cv_volume
+    ) -> ComicVineVolume:
+        """Create or update a ComicVineVolume from a Simyan cv_volume object consistently."""
+        vol_id = getattr(cv_volume, "id", None)
+        if volume is None:
+            volume = ComicVineVolume(cv_id=vol_id)
+        # Core attributes
+        try:
+            volume.name = (
+                getattr(cv_volume, "name", None) or f"Volume {vol_id}"
+                if vol_id
+                else volume.name
+            )
+            volume.start_year = getattr(cv_volume, "start_year", None)
+            volume.count_of_issues = getattr(cv_volume, "issue_count", 0) or 0
+        except Exception:
+            pass
+        # Publisher
+        try:
+            pub = getattr(cv_volume, "publisher", None)
+            if pub is not None:
+                payload = {
+                    "id": getattr(pub, "id", None),
+                    "name": getattr(pub, "name", None),
+                }
+                publisher_obj = self._get_or_create_publisher(payload)
+                if publisher_obj:
+                    volume.publisher = publisher_obj
+        except Exception:
+            # Leave existing publisher as-is on failures
+            pass
+        # Cache expiration & success bookkeeping
+        volume.cache_expires = timezone.now() + timedelta(hours=self.cache_expire_hours)
+        volume.reset_api_failure()
+        volume.save()
+        return volume
