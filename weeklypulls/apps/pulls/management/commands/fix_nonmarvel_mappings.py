@@ -88,7 +88,7 @@ class Command(BaseCommand):
             )
             for idx, sid in enumerate(missing_or_null, start=1):
                 try:
-                    logger.debug(
+                    logger.info(
                         "[fix_nonmarvel] Prefetch %d/%d sid=%s",
                         idx,
                         len(missing_or_null),
@@ -112,7 +112,7 @@ class Command(BaseCommand):
             ).values_list("cv_id", flat=True)
         )
         non_marvel_unknown = all_series_ids - marvel_volume_ids
-        logger.debug(
+        logger.info(
             "[fix_nonmarvel] Post-prefetch diagnostics: total=%d marvel=%d null_pub=%d candidates=%d",
             len(all_series_ids),
             len(marvel_volume_ids),
@@ -137,7 +137,7 @@ class Command(BaseCommand):
             preview = ", ".join(str(s) for s in series_ids[:25])
             if len(series_ids) > 25:
                 preview += ", ..."
-            logger.debug(
+            logger.info(
                 "[fix_nonmarvel] Series ID preview (first %d): %s",
                 min(len(series_ids), 25),
                 preview,
@@ -160,7 +160,7 @@ class Command(BaseCommand):
         unknown_cached = sum(
             1 for _id, pid in cached_publishers_map.items() if pid is None
         )
-        logger.debug(
+        logger.info(
             "[fix_nonmarvel] Cached publisher snapshot: total_cached=%d unknown_cached=%d",
             len(cached_publishers_map),
             unknown_cached,
@@ -183,7 +183,7 @@ class Command(BaseCommand):
                 "[fix_nonmarvel] Fetching source volume %s (force refresh)", sid
             )
             pre_cached_pub = cached_publishers_map.get(sid)
-            logger.debug(
+            logger.info(
                 "[fix_nonmarvel] Pre-fetch cache state sid=%s cached_publisher=%s",
                 sid,
                 pre_cached_pub,
@@ -264,7 +264,7 @@ class Command(BaseCommand):
                     "cv_id", flat=True
                 )
             )
-            logger.debug(
+            logger.info(
                 "[fix_nonmarvel] Marvel volume %s issues fetched: %d",
                 marvel_id,
                 len(issue_ids),
@@ -427,7 +427,7 @@ class Command(BaseCommand):
             # Among exact year matches, pick the one with most issues
             exact.sort(key=lambda c: (c[3] or 0), reverse=True)
             best = exact[0]
-            logger.debug(
+            logger.info(
                 "[fix_nonmarvel] Candidate chosen by exact year %s: id=%s name='%s' issues=%s",
                 desired_year,
                 best[0],
@@ -438,7 +438,7 @@ class Command(BaseCommand):
         # Otherwise pick the candidate with the most issues as best proxy
         candidates.sort(key=lambda c: (c[3] or 0), reverse=True)
         best = candidates[0]
-        logger.debug(
+        logger.info(
             "[fix_nonmarvel] Candidate chosen by issue count: id=%s name='%s' year=%s issues=%s",
             best[0],
             best[1],
@@ -450,9 +450,7 @@ class Command(BaseCommand):
     def _sleep(self):
         """Sleep a fixed amount between API calls for rate limiting."""
         try:
-            logger.debug(
-                "[fix_nonmarvel] Sleeping %ss for rate limiting", SLEEP_SECONDS
-            )
+            logger.info("[fix_nonmarvel] Sleeping %ss for rate limiting", SLEEP_SECONDS)
             time.sleep(SLEEP_SECONDS)
         except Exception:
             pass
