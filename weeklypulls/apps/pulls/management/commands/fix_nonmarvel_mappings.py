@@ -41,13 +41,6 @@ class Command(BaseCommand):
             help="Limit the number of distinct series IDs to process.",
         )
         parser.add_argument(
-            "--series-id",
-            action="append",
-            type=int,
-            default=None,
-            help="Restrict to one or more specific series IDs (can be repeated).",
-        )
-        parser.add_argument(
             "--delete-empty-publishers",
             action="store_true",
             help="After remapping, delete ComicVine publishers with 0 issues.",
@@ -55,7 +48,6 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         apply_changes: bool = options["apply"]
-        series_filter: Optional[List[int]] = options.get("series_id")
         limit: Optional[int] = options.get("limit")
         delete_empty_publishers: bool = options.get("delete_empty_publishers")
 
@@ -68,11 +60,21 @@ class Command(BaseCommand):
             )
             return 2
 
-        # Build the list of distinct series IDs referenced by pulls
-        qs = Pull.objects.all().values_list("series_id", flat=True).distinct()
-        if series_filter:
-            qs = qs.filter(series_id__in=series_filter)
-        series_ids: List[int] = list(qs[: limit or 1000000])
+        marvel_volume_ids = ComicVineVolume.objects.filter(
+            publisher__cv_id=MARVEL_PUBLISHER_ID
+        ).values_list("cv_id", flat=True)
+        qs = (
+            Pull.objects.exclude(series_id__in=marvel_volume_ids)
+            .values_list("series_id", flat=True)
+            .distinct()
+        )
+        if limit:
+            qs = qs[:limit]
+        series_ids: List[int] = list(qs)
+        logger.info(
+            "[fix_nonmarvel] Series to process after filtering & limit: %d",
+            len(series_ids),
+        )
 
         if not series_ids:
             self.stdout.write(self.style.WARNING("No series to process."))
