@@ -7,6 +7,7 @@ from django.db import transaction
 
 from weeklypulls.apps.comicvine.models import ComicVineVolume
 from weeklypulls.apps.pulls.models import Pull
+from weeklypulls.apps.pull_lists.models import PullList
 
 logger = logging.getLogger(__name__)
 
@@ -72,23 +73,36 @@ class Command(BaseCommand):
             )
             return 0
 
+        # Choose a pull list for this user (first existing or create a default one)
+        pull_list = PullList.objects.filter(owner=user).first()
+        created_pull_list = False
+        if not pull_list:
+            if apply_changes:
+                pull_list = PullList.objects.create(owner=user, title="Default")
+                created_pull_list = True
+            else:
+                # Dry-run placeholder object (won't be saved)
+                pull_list = PullList(owner=user, title="Default (dry-run)")
+
         created = 0
         for idx, series_id in enumerate(candidates, start=1):
             if apply_changes:
                 with transaction.atomic():
-                    Pull.objects.create(owner=user, series_id=series_id)
+                    Pull.objects.create(
+                        owner=user, pull_list=pull_list, series_id=series_id
+                    )
                 created += 1
                 self.stdout.write(
                     f"CREATED pull {idx}/{len(candidates)} series={series_id} user={user_id}"
                 )
             else:
                 self.stdout.write(
-                    f"WOULD CREATE pull {idx}/{len(candidates)} series={series_id} user={user_id}"
+                    f"WOULD CREATE pull {idx}/{len(candidates)} series={series_id} user={user_id} pull_list={pull_list.title}"
                 )
 
         summary_msg = (
             f"Done: created={created} total_candidates={len(candidates)} user={user_id} "
-            f"mode={'apply' if apply_changes else 'dry-run'}"
+            f"mode={'apply' if apply_changes else 'dry-run'} pull_list_created={created_pull_list}"
         )
         self.stdout.write(self.style.SUCCESS(summary_msg))
         return 0
