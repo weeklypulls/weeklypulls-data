@@ -61,38 +61,65 @@ class Command(BaseCommand):
             return 2
 
         # Compute diagnostic sets to understand filtering behavior
+        all_series_ids = set(
+            Pull.objects.values_list("series_id", flat=True).distinct()
+        )
+        # Gather all series IDs referenced by pulls.
+        all_series_ids = set(
+            Pull.objects.values_list("series_id", flat=True).distinct()
+        )
+        # Inspect cached volumes to see which lack publisher info.
+        cached_vols = {
+            v.cv_id: v
+            for v in ComicVineVolume.objects.filter(
+                cv_id__in=all_series_ids
+            ).select_related("publisher")
+        }
+        missing_or_null = [
+            sid
+            for sid in all_series_ids
+            if sid not in cached_vols
+            or getattr(cached_vols.get(sid), "publisher", None) is None
+        ]
+        if missing_or_null:
+            logger.info(
+                "[fix_nonmarvel] Prefetching %d volumes with missing/null publisher before filtering",
+                len(missing_or_null),
+            )
+            for idx, sid in enumerate(missing_or_null, start=1):
+                try:
+                    logger.debug(
+                        "[fix_nonmarvel] Prefetch %d/%d sid=%s",
+                        idx,
+                        len(missing_or_null),
+                        sid,
+                    )
+                    svc.get_volume(sid, force_refresh=True)
+                except Exception:
+                    logger.warning(
+                        "[fix_nonmarvel] Prefetch failed for sid=%s", sid, exc_info=True
+                    )
+                self._sleep()
+        # Recompute marvel after prefetch so freshly-fetched Marvel volumes are excluded.
         marvel_volume_ids = set(
             ComicVineVolume.objects.filter(
                 publisher__cv_id=MARVEL_PUBLISHER_ID
             ).values_list("cv_id", flat=True)
         )
-        all_series_ids = set(
-            Pull.objects.values_list("series_id", flat=True).distinct()
+        null_pub_ids = set(
+            ComicVineVolume.objects.filter(
+                publisher__isnull=True, cv_id__in=all_series_ids
+            ).values_list("cv_id", flat=True)
         )
-        cached_vols = list(
-            ComicVineVolume.objects.filter(cv_id__in=all_series_ids).select_related(
-                "publisher"
-            )
-        )
-        cached_with_null_pub = {
-            v.cv_id for v in cached_vols if getattr(v, "publisher", None) is None
-        }
-        cached_non_marvel = {
-            v.cv_id
-            for v in cached_vols
-            if getattr(getattr(v, "publisher", None), "cv_id", None)
-            not in (None, MARVEL_PUBLISHER_ID)
-        }
-        uncached_ids = all_series_ids - {v.cv_id for v in cached_vols}
+        non_marvel_unknown = all_series_ids - marvel_volume_ids
         logger.debug(
-            "[fix_nonmarvel] Pre-filter diagnostics: total_pull_series=%d marvel_cached=%d null_pub_cached=%d non_marvel_cached=%d uncached=%d",
+            "[fix_nonmarvel] Post-prefetch diagnostics: total=%d marvel=%d null_pub=%d candidates=%d",
             len(all_series_ids),
             len(marvel_volume_ids),
-            len(cached_with_null_pub),
-            len(cached_non_marvel),
-            len(uncached_ids),
+            len(null_pub_ids),
+            len(non_marvel_unknown),
         )
-        # Only exclude series already known to be Marvel; keep uncached & null publisher ones
+        # Only exclude known Marvel volumes now.
         qs = (
             Pull.objects.exclude(series_id__in=marvel_volume_ids)
             .values_list("series_id", flat=True)
