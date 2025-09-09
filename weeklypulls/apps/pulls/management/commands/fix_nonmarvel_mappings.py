@@ -143,20 +143,21 @@ class Command(BaseCommand):
             pub_id = getattr(getattr(vol, "publisher", None), "cv_id", None)
             pub_name = getattr(getattr(vol, "publisher", None), "name", None)
             if pub_id == MARVEL_PUBLISHER_ID:
+                reason = (
+                    "not in initial filter because publisher unknown in cache"
+                    if pre_cached_pub != MARVEL_PUBLISHER_ID
+                    else "already identified as Marvel"
+                )
                 logger.info(
-                    (
-                        "[fix_nonmarvel] Skipping Marvel series sid=%s name='%s' "
-                        "pre_cached_pub=%s fetched_pub=%s reason=%s"
-                    ),
+                    "[fix_nonmarvel] Skipping Marvel series sid=%s name='%s' pre_cached_pub=%s fetched_pub=%s reason=%s",
                     sid,
                     vol.name,
                     pre_cached_pub,
                     pub_id,
-                    (
-                        "not in initial filter because publisher unknown in cache"
-                        if pre_cached_pub != MARVEL_PUBLISHER_ID
-                        else "already identified as Marvel"
-                    ),
+                    reason,
+                )
+                self.stdout.write(
+                    f"SKIP(MARVEL): sid={sid} name='{vol.name}' pre_cached_pub={pre_cached_pub} fetched_pub={pub_id} reason={reason}"
                 )
                 summary["skipped_marvel"] += 1
                 continue
