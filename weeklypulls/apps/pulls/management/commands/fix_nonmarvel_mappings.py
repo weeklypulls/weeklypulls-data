@@ -1,5 +1,6 @@
 import sys
 import time
+import logging
 from typing import Iterable, List, Optional, Tuple
 
 from django.core.management.base import BaseCommand, CommandParser
@@ -16,7 +17,9 @@ from weeklypulls.apps.comicvine.services import ComicVineService
 
 
 MARVEL_PUBLISHER_ID = 31
-SLEEP_SECONDS = 30  # fixed delay between ComicVine API calls to avoid rate limits
+SLEEP_SECONDS = 5  # reduced fixed delay between ComicVine API calls
+
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -88,6 +91,9 @@ class Command(BaseCommand):
         for sid in series_ids:
             summary["considered"] += 1
             # Always refresh volume from API to avoid stale/foreign cached data
+            logger.info(
+                "[fix_nonmarvel] Fetching source volume %s (force refresh)", sid
+            )
             vol = svc.get_volume(sid, force_refresh=True)
             self._sleep()
             if not vol:
@@ -104,6 +110,13 @@ class Command(BaseCommand):
                 continue
 
             # Attempt to find a Marvel volume equivalent
+            logger.info(
+                "[fix_nonmarvel] Searching Marvel equivalent for volume %s '%s' (%s) pub=%s",
+                sid,
+                vol.name,
+                vol.start_year,
+                pub_name,
+            )
             candidate = self._find_marvel_equivalent(svc, vol)
             if not candidate:
                 self.stdout.write(
@@ -117,8 +130,16 @@ class Command(BaseCommand):
             marvel_id, marvel_name, marvel_year = candidate
 
             # Ensure Marvel volume is cached and issues are present
+            logger.info(
+                "[fix_nonmarvel] Fetching Marvel target volume %s (force refresh)",
+                marvel_id,
+            )
             marvel_vol = svc.get_volume(marvel_id, force_refresh=True)
             self._sleep()
+            logger.info(
+                "[fix_nonmarvel] Fetching issues for Marvel volume %s to mark read",
+                marvel_id,
+            )
             svc.get_volume_issues(marvel_id)  # upsert issues for the volume
             self._sleep()
             issue_ids = list(
@@ -231,6 +252,12 @@ class Command(BaseCommand):
             if year:
                 params["filter"] += f",start_year:{year}"
             params["sort"] = "count_of_issues:desc"
+            logger.info(
+                "[fix_nonmarvel] list_volumes query name='%s' year=%s params=%s",
+                name,
+                year,
+                params,
+            )
             results = svc.cv.list_volumes(params=params) or []
             self._sleep()
         except Exception:
@@ -275,6 +302,9 @@ class Command(BaseCommand):
     def _sleep(self):
         """Sleep a fixed amount between API calls for rate limiting."""
         try:
+            logger.debug(
+                "[fix_nonmarvel] Sleeping %ss for rate limiting", SLEEP_SECONDS
+            )
             time.sleep(SLEEP_SECONDS)
         except Exception:
             pass
