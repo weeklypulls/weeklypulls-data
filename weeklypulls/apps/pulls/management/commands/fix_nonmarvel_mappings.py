@@ -90,6 +90,25 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("No series to process."))
             return 0
 
+        # Build a map of cached publisher IDs (before any fresh API fetch) so we can
+        # explain later why a series ended up being skipped as Marvel even though it
+        # passed the initial queryset filter.
+        cached_publishers_map = {}
+        for v in ComicVineVolume.objects.filter(cv_id__in=series_ids).select_related(
+            "publisher"
+        ):
+            cached_publishers_map[v.cv_id] = (
+                v.publisher.cv_id if getattr(v, "publisher", None) else None
+            )
+        unknown_cached = sum(
+            1 for _id, pid in cached_publishers_map.items() if pid is None
+        )
+        logger.debug(
+            "[fix_nonmarvel] Cached publisher snapshot: total_cached=%d unknown_cached=%d",
+            len(cached_publishers_map),
+            unknown_cached,
+        )
+
         summary = {
             "considered": 0,
             "skipped_marvel": 0,
@@ -106,6 +125,12 @@ class Command(BaseCommand):
             logger.info(
                 "[fix_nonmarvel] Fetching source volume %s (force refresh)", sid
             )
+            pre_cached_pub = cached_publishers_map.get(sid)
+            logger.debug(
+                "[fix_nonmarvel] Pre-fetch cache state sid=%s cached_publisher=%s",
+                sid,
+                pre_cached_pub,
+            )
             vol = svc.get_volume(sid, force_refresh=True)
             self._sleep()
             if not vol:
@@ -119,10 +144,19 @@ class Command(BaseCommand):
             pub_name = getattr(getattr(vol, "publisher", None), "name", None)
             if pub_id == MARVEL_PUBLISHER_ID:
                 logger.info(
-                    "[fix_nonmarvel] Skipping series %s (%s) already Marvel (%s)",
+                    (
+                        "[fix_nonmarvel] Skipping Marvel series sid=%s name='%s' "
+                        "pre_cached_pub=%s fetched_pub=%s reason=%s"
+                    ),
                     sid,
                     vol.name,
-                    pub_name,
+                    pre_cached_pub,
+                    pub_id,
+                    (
+                        "not in initial filter because publisher unknown in cache"
+                        if pre_cached_pub != MARVEL_PUBLISHER_ID
+                        else "already identified as Marvel"
+                    ),
                 )
                 summary["skipped_marvel"] += 1
                 continue
