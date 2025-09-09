@@ -75,6 +75,16 @@ class Command(BaseCommand):
             "[fix_nonmarvel] Series to process after filtering & limit: %d",
             len(series_ids),
         )
+        if series_ids:
+            # Show up to first 25 IDs for context
+            preview = ", ".join(str(s) for s in series_ids[:25])
+            if len(series_ids) > 25:
+                preview += ", ..."
+            logger.debug(
+                "[fix_nonmarvel] Series ID preview (first %d): %s",
+                min(len(series_ids), 25),
+                preview,
+            )
 
         if not series_ids:
             self.stdout.write(self.style.WARNING("No series to process."))
@@ -108,6 +118,12 @@ class Command(BaseCommand):
             pub_id = getattr(getattr(vol, "publisher", None), "cv_id", None)
             pub_name = getattr(getattr(vol, "publisher", None), "name", None)
             if pub_id == MARVEL_PUBLISHER_ID:
+                logger.info(
+                    "[fix_nonmarvel] Skipping series %s (%s) already Marvel (%s)",
+                    sid,
+                    vol.name,
+                    pub_name,
+                )
                 summary["skipped_marvel"] += 1
                 continue
 
@@ -121,6 +137,13 @@ class Command(BaseCommand):
             )
             candidate = self._find_marvel_equivalent(svc, vol)
             if not candidate:
+                logger.info(
+                    "[fix_nonmarvel] No Marvel match for series %s '%s' (%s) pub=%s",
+                    sid,
+                    vol.name,
+                    vol.start_year,
+                    pub_name,
+                )
                 self.stdout.write(
                     self.style.WARNING(
                         f"Series {sid}: '{vol.name}' ({vol.start_year}) publisher={pub_name or 'Unknown'} -> No Marvel match"
@@ -149,10 +172,19 @@ class Command(BaseCommand):
                     "cv_id", flat=True
                 )
             )
+            logger.debug(
+                "[fix_nonmarvel] Marvel volume %s issues fetched: %d",
+                marvel_id,
+                len(issue_ids),
+            )
 
             # Process pulls for this series
             pulls = list(Pull.objects.filter(series_id=sid).select_related("owner"))
             if not pulls:
+                logger.info(
+                    "[fix_nonmarvel] No pulls found for source series %s; skipping remap",
+                    sid,
+                )
                 continue
 
             # Apply or dry-run
@@ -186,6 +218,14 @@ class Command(BaseCommand):
                 f"{vol.name} ({vol.start_year}) [{pub_name or 'Unknown'}]  "
                 f"=> {marvel_name} ({marvel_year}) [Marvel]  "
                 f"pulls={len(pulls)} issues={len(issue_ids)}"
+            )
+            logger.info(
+                "[fix_nonmarvel] %s series %s -> %s (pulls=%d issues=%d)",
+                action,
+                sid,
+                marvel_id,
+                len(pulls),
+                len(issue_ids),
             )
 
         # Optional cleanup: delete publishers with 0 issues
@@ -295,10 +335,24 @@ class Command(BaseCommand):
             # Among exact year matches, pick the one with most issues
             exact.sort(key=lambda c: (c[3] or 0), reverse=True)
             best = exact[0]
+            logger.debug(
+                "[fix_nonmarvel] Candidate chosen by exact year %s: id=%s name='%s' issues=%s",
+                desired_year,
+                best[0],
+                best[1],
+                best[3],
+            )
             return (best[0], best[1], best[2])
         # Otherwise pick the candidate with the most issues as best proxy
         candidates.sort(key=lambda c: (c[3] or 0), reverse=True)
         best = candidates[0]
+        logger.debug(
+            "[fix_nonmarvel] Candidate chosen by issue count: id=%s name='%s' year=%s issues=%s",
+            best[0],
+            best[1],
+            best[2],
+            best[3],
+        )
         return (best[0], best[1], best[2])
 
     def _sleep(self):
