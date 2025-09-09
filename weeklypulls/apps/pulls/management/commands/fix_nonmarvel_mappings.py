@@ -60,11 +60,18 @@ class Command(BaseCommand):
             )
             return 2
 
+        # Precompute IDs of volumes already known to be Marvel OR with unknown publisher
+        # (we'll skip unknown-publisher volumes too to reduce redundant lookups that
+        # immediately resolve to Marvel). User requested to exclude null publisher volumes.
         marvel_volume_ids = ComicVineVolume.objects.filter(
             publisher__cv_id=MARVEL_PUBLISHER_ID
         ).values_list("cv_id", flat=True)
+        null_pub_volume_ids = ComicVineVolume.objects.filter(
+            publisher__isnull=True
+        ).values_list("cv_id", flat=True)
         qs = (
             Pull.objects.exclude(series_id__in=marvel_volume_ids)
+            .exclude(series_id__in=null_pub_volume_ids)
             .values_list("series_id", flat=True)
             .distinct()
         )
