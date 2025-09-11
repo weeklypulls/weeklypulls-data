@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
     help = (
-        "Find series mapped to non-Marvel publishers, locate the original Marvel "
+        "Find series mapped to non-Marvel publishers, locate the Dooriginal Marvel "
         "volume via ComicVine, repoint pulls, and mark all issues as read."
     )
 
@@ -280,9 +280,29 @@ class Command(BaseCommand):
 
             # Guard 1: If the suggested Marvel candidate is actually the same ID and still non-Marvel, treat as no-match.
             if marvel_id == sid and target_pub_id != MARVEL_PUBLISHER_ID:
+                logger.info(
+                    (
+                        "[fix_nonmarvel] Same-ID non-Marvel candidate; "
+                        "source sid=%s name='%s' year=%s src_pub=(%s,'%s') "
+                        "candidate=(%s,'%s',%s) target_pub=(%s,'%s') pre_cached_pub=%s"
+                    ),
+                    sid,
+                    vol.name,
+                    vol.start_year,
+                    pub_id,
+                    pub_name,
+                    marvel_id,
+                    marvel_name,
+                    marvel_year,
+                    target_pub_id,
+                    target_pub_name,
+                    pre_cached_pub,
+                )
                 self.stdout.write(
                     self.style.WARNING(
-                        f"Series {sid}: candidate returned same id but publisher still non-Marvel ({target_pub_name or target_pub_id}); skipping"
+                        f"Series {sid}: same-id candidate but publisher still non-Marvel -> "
+                        f"src_pub={pub_name or pub_id} target_pub={target_pub_name or target_pub_id} "
+                        f"name='{vol.name}' year={vol.start_year}; skipping"
                     )
                 )
                 summary["skipped_no_match"] += 1
