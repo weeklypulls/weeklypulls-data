@@ -460,7 +460,110 @@ class Command(BaseCommand):
             svc, name=name, year=None, exclude_id=getattr(vol, "cv_id", None)
         )
         chosen = self._choose_candidate(candidates, year)
-        return chosen
+        if chosen:
+            return chosen
+
+        # Last resort: try a few normalized name variants (strip common imprint prefixes,
+        # split on colon into parts, strip trailing parentheses) with year/lookback and name-only
+        variants = self._generate_name_variants(name)
+        for idx, vname in enumerate(variants, start=1):
+            if vname == name:
+                # already tried this form above
+                continue
+            logger.info(
+                "[fix_nonmarvel] Trying normalized name variant %d/%d: '%s' (orig='%s')",
+                idx,
+                len(variants),
+                vname,
+                name,
+            )
+            # Try with original year and previous-year lookback
+            if year:
+                candidates = self._search_volumes(
+                    svc,
+                    name=vname,
+                    year=year,
+                    exclude_id=getattr(vol, "cv_id", None),
+                )
+                chosen = self._choose_candidate(candidates, year)
+                if chosen:
+                    return chosen
+                for prev in range(1, PREVIOUS_YEARS_LOOKBACK + 1):
+                    try_year = year - prev
+                    logger.info(
+                        "[fix_nonmarvel] Variant previous-year try %s for '%s'",
+                        try_year,
+                        vname,
+                    )
+                    candidates = self._search_volumes(
+                        svc,
+                        name=vname,
+                        year=try_year,
+                        exclude_id=getattr(vol, "cv_id", None),
+                    )
+                    chosen = self._choose_candidate(candidates, try_year)
+                    if chosen:
+                        return chosen
+            # Finally name-only for this variant
+            candidates = self._search_volumes(
+                svc, name=vname, year=None, exclude_id=getattr(vol, "cv_id", None)
+            )
+            chosen = self._choose_candidate(candidates, year)
+            if chosen:
+                return chosen
+        return None
+
+    def _generate_name_variants(self, name: str) -> List[str]:
+        """Generate a small set of normalized name variants to improve matching.
+
+        Heuristics:
+        - Remove common imprint prefixes like '100% Marvel' (case-insensitive, optional dot)
+        - Split on first colon and try before/after parts
+        - Strip trailing parenthetical qualifiers
+        """
+        import re
+
+        seen = set()
+        out: List[str] = []
+
+        def add(n: Optional[str]):
+            if not n:
+                return
+            n2 = n.strip()
+            if not n2:
+                return
+            if n2 not in seen:
+                seen.add(n2)
+                out.append(n2)
+
+        add(name)
+
+        # Remove leading '100% Marvel' (with optional dot) and surrounding spaces
+        prefix_pattern = re.compile(r"^100%\s*Marvel\.?\s*", re.IGNORECASE)
+        base = prefix_pattern.sub("", name).strip()
+        add(base)
+
+        # Strip trailing parenthetical '(... )'
+        paren_pattern = re.compile(r"\s*\([^)]*\)\s*$")
+        add(paren_pattern.sub("", name))
+        add(paren_pattern.sub("", base))
+
+        # Split on colon into left/right
+        if ":" in name:
+            left, right = name.split(":", 1)
+            add(left)
+            add(right)
+            add(paren_pattern.sub("", left))
+            add(paren_pattern.sub("", right))
+
+        if ":" in base:
+            left, right = base.split(":", 1)
+            add(left)
+            add(right)
+            add(paren_pattern.sub("", left))
+            add(paren_pattern.sub("", right))
+
+        return out
 
     def _search_volumes(
         self,
@@ -492,8 +595,20 @@ class Command(BaseCommand):
             results = []
 
         out: List[Tuple[int, str, Optional[int], int]] = []
+        filtered_non_marvel_hints = 0
         for r in results:
             try:
+                # Some APIs include a publisher hint on list results; filter defensively here
+                pub_ref = getattr(r, "publisher", None)
+                pub_ref_id = None
+                if pub_ref is not None:
+                    # Support either id or cv_id attribute
+                    pub_ref_id = getattr(pub_ref, "id", None) or getattr(
+                        pub_ref, "cv_id", None
+                    )
+                if pub_ref_id is not None and pub_ref_id != MARVEL_PUBLISHER_ID:
+                    filtered_non_marvel_hints += 1
+                    continue
                 out.append(
                     (
                         r.id,
@@ -504,6 +619,13 @@ class Command(BaseCommand):
                 )
             except Exception:
                 continue
+        if filtered_non_marvel_hints:
+            logger.info(
+                "[fix_nonmarvel] Filtered %d non-Marvel list results by publisher hint for name='%s' year=%s",
+                filtered_non_marvel_hints,
+                name,
+                year,
+            )
         if exclude_id is not None:
             before = len(out)
             out = [c for c in out if c[0] != exclude_id]
