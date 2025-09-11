@@ -1,6 +1,25 @@
 from django.contrib import admin
+from django.contrib.admin import SimpleListFilter
+from django.db.models import Exists, OuterRef
 from django.utils.html import format_html
 from .models import ComicVineVolume, ComicVineIssue, ComicVinePublisher, ComicVineWeek
+from weeklypulls.apps.pulls.models import Pull
+
+
+class HasPullsFilter(SimpleListFilter):
+    title = "has pulls"
+    parameter_name = "has_pulls"
+
+    def lookups(self, request, model_admin):
+        return (("yes", "Yes"), ("no", "No"))
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value == "yes":
+            return queryset.filter(has_pulls=True)
+        if value == "no":
+            return queryset.filter(has_pulls=False)
+        return queryset
 
 
 @admin.register(ComicVineVolume)
@@ -14,8 +33,9 @@ class ComicVineVolumeAdmin(admin.ModelAdmin):
         "last_updated",
         "is_cache_expired",
         "api_fetch_failed",
+        "has_pulls",
     )
-    list_filter = ("api_fetch_failed", "start_year", "publisher")
+    list_filter = ("api_fetch_failed", "start_year", "publisher", HasPullsFilter)
     search_fields = ("name", "cv_id", "publisher__name")
     readonly_fields = ("last_updated", "api_fetch_failure_count", "api_last_failure")
     raw_id_fields = ("publisher",)
@@ -44,6 +64,18 @@ class ComicVineVolumeAdmin(admin.ModelAdmin):
 
     is_cache_expired.boolean = True
     is_cache_expired.short_description = "Cache Expired"
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.annotate(
+            has_pulls=Exists(Pull.objects.filter(series_id=OuterRef("cv_id")))
+        )
+
+    def has_pulls(self, obj):
+        return bool(getattr(obj, "has_pulls", False))
+
+    has_pulls.boolean = True
+    has_pulls.short_description = "Has Pulls"
 
 
 @admin.register(ComicVinePublisher)
