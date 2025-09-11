@@ -270,6 +270,40 @@ class Command(BaseCommand):
                 len(issue_ids),
             )
 
+            # Re-evaluate publisher AFTER forced refresh of the (target) volume
+            target_pub_id = getattr(
+                getattr(marvel_vol, "publisher", None), "cv_id", None
+            )
+            target_pub_name = getattr(
+                getattr(marvel_vol, "publisher", None), "name", None
+            )
+
+            # Guard 1: If the suggested Marvel candidate is actually the same ID and still non-Marvel, treat as no-match.
+            if marvel_id == sid and target_pub_id != MARVEL_PUBLISHER_ID:
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"Series {sid}: candidate returned same id but publisher still non-Marvel ({target_pub_name or target_pub_id}); skipping"
+                    )
+                )
+                summary["skipped_no_match"] += 1
+                continue
+
+            # Guard 2: If candidate differs but fetched target isn't Marvel (unexpected given filter), skip.
+            if target_pub_id != MARVEL_PUBLISHER_ID:
+                logger.info(
+                    "[fix_nonmarvel] Candidate %s for source %s not Marvel after fetch (pub=%s); skipping",
+                    marvel_id,
+                    sid,
+                    target_pub_id,
+                )
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"Series {sid}: target {marvel_id} fetched but publisher still not Marvel (pub={target_pub_id}); skipping"
+                    )
+                )
+                summary["skipped_no_match"] += 1
+                continue
+
             # Process pulls for this series
             pulls = list(Pull.objects.filter(series_id=sid).select_related("owner"))
             if not pulls:
@@ -277,6 +311,17 @@ class Command(BaseCommand):
                     "[fix_nonmarvel] No pulls found for source series %s; skipping remap",
                     sid,
                 )
+                continue
+
+            # Determine if any actual change will occur (series_id or publisher change)
+            # If mapping is same series_id AND original publisher already Marvel, treat as skip.
+            original_was_marvel = pub_id == MARVEL_PUBLISHER_ID
+            if marvel_id == sid and original_was_marvel:
+                logger.info(
+                    "[fix_nonmarvel] No-op mapping (already Marvel id=%s); skipping",
+                    sid,
+                )
+                summary["skipped_marvel"] += 1
                 continue
 
             # Apply or dry-run
