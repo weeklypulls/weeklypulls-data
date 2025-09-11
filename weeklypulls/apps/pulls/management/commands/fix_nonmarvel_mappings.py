@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 class Command(BaseCommand):
     help = (
-        "Find series mapped to non-Marvel publishers, locate the Dooriginal Marvel "
+        "Find series mapped to non-Marvel publishers, locate the original Marvel "
         "volume via ComicVine, repoint pulls, and mark all issues as read."
     )
 
@@ -429,7 +429,9 @@ class Command(BaseCommand):
         year = vol.start_year
 
         # First try name + year + Marvel publisher
-        candidates = self._search_volumes(svc, name=name, year=year)
+        candidates = self._search_volumes(
+            svc, name=name, year=year, exclude_id=getattr(vol, "cv_id", None)
+        )
         chosen = self._choose_candidate(candidates, year)
         if chosen:
             return chosen
@@ -443,18 +445,30 @@ class Command(BaseCommand):
                     try_year,
                     name,
                 )
-                candidates = self._search_volumes(svc, name=name, year=try_year)
+                candidates = self._search_volumes(
+                    svc,
+                    name=name,
+                    year=try_year,
+                    exclude_id=getattr(vol, "cv_id", None),
+                )
                 chosen = self._choose_candidate(candidates, try_year)
                 if chosen:
                     return chosen
 
         # Fallback: name only under Marvel; choose best by exact-year or issue count
-        candidates = self._search_volumes(svc, name=name, year=None)
+        candidates = self._search_volumes(
+            svc, name=name, year=None, exclude_id=getattr(vol, "cv_id", None)
+        )
         chosen = self._choose_candidate(candidates, year)
         return chosen
 
     def _search_volumes(
-        self, svc: ComicVineService, *, name: str, year: Optional[int]
+        self,
+        svc: ComicVineService,
+        *,
+        name: str,
+        year: Optional[int],
+        exclude_id: Optional[int] = None,
     ) -> List[Tuple[int, str, Optional[int], int]]:
         """
         Return list of candidates as tuples: (id, name, start_year, issue_count)
@@ -490,6 +504,18 @@ class Command(BaseCommand):
                 )
             except Exception:
                 continue
+        if exclude_id is not None:
+            before = len(out)
+            out = [c for c in out if c[0] != exclude_id]
+            removed = before - len(out)
+            if removed:
+                logger.info(
+                    "[fix_nonmarvel] Excluded %d same-id candidate(s) (id=%s) from results for name='%s' year=%s",
+                    removed,
+                    exclude_id,
+                    name,
+                    year,
+                )
         return out
 
     def _choose_candidate(
