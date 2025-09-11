@@ -17,6 +17,7 @@ from weeklypulls.apps.comicvine.services import ComicVineService
 
 
 MARVEL_PUBLISHER_ID = 31
+PREVIOUS_YEARS_LOOKBACK = 3  # how many prior years to try when exact-year match fails
 SLEEP_SECONDS = 5  # reduced fixed delay between ComicVine API calls
 
 logger = logging.getLogger(__name__)
@@ -432,6 +433,20 @@ class Command(BaseCommand):
         chosen = self._choose_candidate(candidates, year)
         if chosen:
             return chosen
+
+        # If not found, try previous years up to PREVIOUS_YEARS_LOOKBACK
+        if year:
+            for prev in range(1, PREVIOUS_YEARS_LOOKBACK + 1):
+                try_year = year - prev
+                logger.info(
+                    "[fix_nonmarvel] No exact-year match; trying previous year %s for '%s'",
+                    try_year,
+                    name,
+                )
+                candidates = self._search_volumes(svc, name=name, year=try_year)
+                chosen = self._choose_candidate(candidates, try_year)
+                if chosen:
+                    return chosen
 
         # Fallback: name only under Marvel; choose best by exact-year or issue count
         candidates = self._search_volumes(svc, name=name, year=None)
