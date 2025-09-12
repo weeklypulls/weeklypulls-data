@@ -196,6 +196,9 @@ class ComicVineService:
         resume_next_date = None
         resume_next_page = 1
         volume_cache: dict[int, Optional[ComicVineVolume]] = {}
+        delta_days = (timezone.now().date() - start_date).days
+        weeks_back = max(0, delta_days // 7)
+        ttl_days = weeks_back + 1
 
         while cur <= end_date:
             try:
@@ -234,6 +237,10 @@ class ComicVineService:
                             continue
 
                         defaults, _, _ = self._build_issue_defaults(s_issue, volume)
+                        # Override per-issue cache TTL based on week recency
+                        defaults["cache_expires"] = timezone.now() + timedelta(
+                            days=ttl_days
+                        )
                         ComicVineIssue.objects.update_or_create(
                             cv_id=s_issue.id, defaults=defaults
                         )
