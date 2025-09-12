@@ -242,10 +242,7 @@ class ComicVineService:
             logger.warning("ComicVine API not configured; skipping weekly prime")
             return {"created": 0, "updated": 0, "fetched": 0, "complete": True}
 
-        from .models import (
-            ComicVineIssue,
-            ComicVineVolume,
-        )  # local import to avoid cycles
+        from .models import ComicVineIssue
 
         total_fetched = 0
         created_count = 0
@@ -253,7 +250,7 @@ class ComicVineService:
         budget_exhausted = False
 
         # Overall time budget for this priming call to protect request latency
-        budget_seconds = getattr(settings, "COMICVINE_PRIME_BUDGET_SECONDS", 6)
+        budget_seconds = 20
         budget_start = time.time()
 
         # Iterate each day to avoid uncertain API range filter syntax
@@ -268,7 +265,7 @@ class ComicVineService:
             try:
                 page = max(1, start_page) if first_day else 1
                 day_fetched = 0
-                while page <= 3:  # reasonable safety limit
+                while True:
                     # Respect overall time budget
                     if time.time() - budget_start > budget_seconds:
                         budget_exhausted = True
@@ -277,6 +274,7 @@ class ComicVineService:
                             resume_next_date = cur
                             resume_next_page = page
                         break
+
                     issues = self.cv.list_issues(
                         params={
                             "offset": (page - 1) * 500,
@@ -284,46 +282,38 @@ class ComicVineService:
                             "sort": "store_date:asc",
                         },
                     )
+
                     if not issues:
                         break
+
                     day_fetched += len(issues)
                     for s_issue in issues:
                         # Ensure volume exists/updated minimally
-                        vol = getattr(s_issue, "volume", None)
-                        vol_id = getattr(vol, "id", None)
-                        vol_name = getattr(vol, "name", None)
-                        pub_payload = None
-                        try:
-                            pub = getattr(vol, "publisher", None)
-                            pub_id = getattr(pub, "id", None) if pub else None
-                            pub_name = getattr(pub, "name", None) if pub else None
-                            if pub_id is not None:
-                                pub_payload = {"id": pub_id, "name": pub_name}
-                        except Exception:
-                            pub_payload = None
-                        if vol_id is None:
-                            # skip issues without a volume id
-                            continue
-                        volume = self._ensure_volume(vol_id, vol_name, pub_payload)
+                        vol = s_issue.volume
+                        pub = vol.publisher
+                        volume = self._ensure_volume(
+                            vol.id, vol.name, {"id": pub.id, "name": pub.name}
+                        )
 
                         defaults, _, _ = self._build_issue_defaults(s_issue, volume)
 
                         ComicVineIssue.objects.update_or_create(
                             cv_id=s_issue.id, defaults=defaults
                         )
-                        # Track CRUD metrics
-                        # We can't distinguish easily here without extra query costs; count fetched only
-                        # created_count/updated_count are less important than fetched for budgeting
 
                     last_page_used = page
+
                     # Stop paging the day if fewer than a full page returned
                     if len(issues) < 500:
                         break
+
                     page += 1
 
                 total_fetched += day_fetched
+
             except ServiceError as e:
                 logger.error(f"API ERROR: weekly issues for {cur}: {e}")
+
             except Exception as e:
                 logger.error(f"Unexpected error fetching weekly issues for {cur}: {e}")
 
@@ -335,10 +325,12 @@ class ComicVineService:
             # Stop if over budget
             if time.time() - budget_start > budget_seconds:
                 budget_exhausted = True
+
                 # Resume on the next day at page 1
                 if resume_next_date is None:
                     resume_next_date = cur
                     resume_next_page = 1
+
                 break
 
         complete = not budget_exhausted
@@ -347,13 +339,14 @@ class ComicVineService:
             "updated": updated_count,
             "fetched": total_fetched,
             "complete": complete,
-            # Provide resume hints when not complete
             "next_page": 1 if complete else (resume_next_page or (last_page_used + 1)),
             "next_date": None if complete else resume_next_date,
         }
+
         logger.info(
             f"Weekly prime {start_date}..{end_date}: {summary['fetched']} fetched"
         )
+
         return summary
 
     # -------------------------

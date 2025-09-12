@@ -64,9 +64,9 @@ class ComicVineVolume(ComicVineCacheModel):
     # Link to publisher (ComicVine entity). Nullable if unknown.
     publisher = models.ForeignKey(
         ComicVinePublisher,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
+        null=False,
+        blank=False,
+        on_delete=models.PROTECT,
         related_name="volumes",
     )
 
