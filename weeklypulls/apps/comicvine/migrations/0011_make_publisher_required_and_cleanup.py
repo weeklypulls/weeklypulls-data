@@ -8,6 +8,7 @@ def purge_volumes_without_publisher(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
+    atomic = False
 
     dependencies = [
         ("comicvine", "0010_remove_comicvineissue_cover_date_and_more"),
@@ -21,6 +22,7 @@ class Migration(migrations.Migration):
             model_name="comicvinevolume",
             name="publisher",
             field=models.ForeignKey(
+                null=False,
                 on_delete=django.db.models.deletion.PROTECT,
                 related_name="volumes",
                 to="comicvine.comicvinepublisher",
