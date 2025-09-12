@@ -391,6 +391,7 @@ class ComicVineService:
             "date": (s_issue.store_date or s_issue.cover_date),
             "date_added": s_issue.date_added,
             "date_last_updated": s_issue.date_last_updated,
+            "cache_expires": timezone.now() + timedelta(hours=self.cache_expire_hours),
             "image_original_url": str(img.original_url),
             "image_thumbnail_url": str(img.thumbnail),
             "image_tiny_url": str(img.tiny_url),
