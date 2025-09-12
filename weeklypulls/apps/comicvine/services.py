@@ -187,7 +187,7 @@ class ComicVineService:
         updated_count = 0
         budget_exhausted = False
 
-        budget_seconds = 15
+        budget_seconds = 10
         budget_start = time.time()
 
         cur = resume_date or start_date
