@@ -3,6 +3,7 @@ import logging
 import datetime
 from datetime import timedelta
 from typing import Optional, Any, TypedDict, Dict, List
+import sqlite3
 
 from django.conf import settings
 from django.utils import timezone
@@ -47,8 +48,7 @@ class ComicVineService:
             logger.error("ComicVine API key not configured")
             self.cv = None
         else:
-            cache = SQLiteCache()
-            self.cv = Comicvine(api_key=self.api_key, cache=cache)
+            self.cv = Comicvine(api_key=self.api_key)
             self.cv.timeout = (
                 settings.COMICVINE_HTTP_TIMEOUT
                 if hasattr(settings, "COMICVINE_HTTP_TIMEOUT")
@@ -131,8 +131,8 @@ class ComicVineService:
         page = 0
         while page < 3:
             page += 1
-            page_issues = self.cv.list_issues(
-                params={
+            page_issues = self._list_issues(
+                {
                     "offset": (page - 1) * 500,
                     "filter": f"volume:{volume_id}",
                     "sort": "store_date:asc",
@@ -209,8 +209,8 @@ class ComicVineService:
                             resume_next_page = page
                         break
 
-                    issues = self.cv.list_issues(
-                        params={
+                    issues = self._list_issues(
+                        {
                             "offset": (page - 1) * 500,
                             "filter": f"store_date:{cur.strftime('%Y-%m-%d')}",
                             "sort": "store_date:asc",
@@ -244,7 +244,6 @@ class ComicVineService:
                     page += 1
 
                 total_fetched += day_fetched
-
             except ServiceError as e:
                 logger.error(f"API ERROR: weekly issues for {cur}: {e}")
             except Exception as e:
@@ -275,11 +274,6 @@ class ComicVineService:
         )
         return summary
 
-    # -------------------------
-    # Internal helpers (DRY)
-    # -------------------------
-    # (unused helpers removed after switching to direct typed values)
-
     def _ensure_utc(
         self, dt: Optional[datetime.datetime]
     ) -> Optional[datetime.datetime]:
@@ -288,6 +282,21 @@ class ComicVineService:
         if timezone.is_naive(dt):
             return timezone.make_aware(dt, datetime.timezone.utc)
         return dt.astimezone(datetime.timezone.utc)
+
+    def _list_issues(self, params: Dict[str, Any]) -> List[BasicIssue]:
+        """Call Simyan list_issues, retrying once without cache if the SQLite cache
+        raises a UNIQUE constraint error (seen under concurrency).
+        """
+        if not self.cv:
+            return []
+        try:
+            return self.cv.list_issues(params=params)
+        except ServiceError as e:
+            logger.error(f"API ERROR list_issues: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"Unexpected error in list_issues: {e}")
+            return []
 
     def _get_or_create_publisher(
         self, payload: CVPublisher
