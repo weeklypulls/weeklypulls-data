@@ -280,7 +280,14 @@ class ComicVineService:
     # -------------------------
     # (unused helpers removed after switching to direct typed values)
 
-    # Note: dynamic image attribute helper removed to avoid getattr usage entirely
+    def _ensure_utc(
+        self, dt: Optional[datetime.datetime]
+    ) -> Optional[datetime.datetime]:
+        if dt is None:
+            return None
+        if timezone.is_naive(dt):
+            return timezone.make_aware(dt, datetime.timezone.utc)
+        return dt.astimezone(datetime.timezone.utc)
 
     def _get_or_create_publisher(
         self, payload: CVPublisher
@@ -322,7 +329,7 @@ class ComicVineService:
                         )
                         if pub is not None:
                             pub_obj = self._get_or_create_publisher(pub)
-                    except Exception:
+                    except BaseException:
                         pass
                 if pub_obj:
                     volume.publisher = pub_obj
@@ -335,16 +342,17 @@ class ComicVineService:
             if not publisher_obj and self.cv:
                 try:
                     cv_volume = self.cv.get_volume(vol_id)
-                    pub = (
-                        cv_volume.publisher if hasattr(cv_volume, "publisher") else None
-                    )
+                    pub = cv_volume.publisher
+
                     if pub is not None:
                         publisher_obj = self._get_or_create_publisher(pub)
-                    vol_name = (
-                        cv_volume.name if hasattr(cv_volume, "name") else None
-                    ) or vol_name
-                except Exception:
+                    vol_name = cv_volume.name
+                except BaseException:
                     pass
+
+            if not publisher_obj:
+                return None
+
             volume = ComicVineVolume(
                 cv_id=vol_id,
                 name=vol_name or f"Volume {vol_id}",
@@ -389,8 +397,8 @@ class ComicVineService:
         defaults = {
             "volume": volume,
             "date": (s_issue.store_date or s_issue.cover_date),
-            "date_added": s_issue.date_added,
-            "date_last_updated": s_issue.date_last_updated,
+            "date_added": self._ensure_utc(s_issue.date_added),
+            "date_last_updated": self._ensure_utc(s_issue.date_last_updated),
             "cache_expires": timezone.now() + timedelta(hours=self.cache_expire_hours),
             "image_original_url": str(img.original_url),
             "image_thumbnail_url": str(img.thumbnail),
