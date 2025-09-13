@@ -65,7 +65,7 @@ class PullSerializer(serializers.HyperlinkedModelSerializer):
         volume = (
             ComicVineVolume.objects.filter(cv_id=obj.series_id).only("name").first()
         )
-        return getattr(volume, "name", None)
+        return volume.name if volume else None
 
     def get_series_start_year(self, obj):
         from weeklypulls.apps.comicvine.models import ComicVineVolume
@@ -75,7 +75,7 @@ class PullSerializer(serializers.HyperlinkedModelSerializer):
             .only("start_year")
             .first()
         )
-        return getattr(volume, "start_year", None)
+        return volume.start_year if volume else None
 
     class Meta:
         model = Pull
@@ -121,9 +121,16 @@ class IIssueSerializer(serializers.Serializer):
     pull = PullContextSerializer(required=False, allow_null=True)
 
 
+class PrimingSerializer(serializers.Serializer):
+    complete = serializers.BooleanField()
+    next_date = serializers.DateField(required=False, allow_null=True)
+    next_page = serializers.IntegerField(required=False, allow_null=True)
+
+
 class WeekSerializer(serializers.Serializer):
     week_of = serializers.DateField()
     comics = IIssueSerializer(many=True)
+    priming = PrimingSerializer(required=False)
 
 
 """Common helpers for issue querying / serialization"""
@@ -172,7 +179,7 @@ ALLOWED_UNREAD_ORDERINGS = {
 def _images_from_issue(issue):
     """Return a single best image URL using the annotation or first non-null fallback."""
     # Prefer the annotated unified image if present
-    image = getattr(issue, "image_url", None)
+    image = issue.image_url
     if image:
         return [image]
     # Fallback to the first non-null candidate
@@ -185,25 +192,23 @@ def _images_from_issue(issue):
 
 def issue_to_iissue(issue, pull=None):
     """Map ComicVineIssue (+ optional Pull) to IIssue-shaped dict."""
-    vol = getattr(issue, "volume", None)
-    vol_name = getattr(vol, "name", "")
-    number = getattr(issue, "number", None)
+    vol = issue.volume
+    vol_name = vol.name if vol else ""
+    number = issue.number
     title = (
-        f"{vol_name} #{number}".strip()
-        if vol_name or number
-        else (getattr(issue, "name", None) or "")
+        f"{vol_name} #{number}".strip() if vol_name or number else (issue.name or "")
     )
 
     volume_payload = {
-        "id": str(getattr(vol, "cv_id", "")),
-        "name": getattr(vol, "name", None),
-        "start_year": getattr(vol, "start_year", None),
+        "id": str(vol.cv_id) if vol else "",
+        "name": vol.name if vol else None,
+        "start_year": vol.start_year if vol else None,
     }
-    publisher = getattr(vol, "publisher", None)
+    publisher = vol.publisher if vol else None
     if publisher:
         volume_payload["publisher"] = {
-            "id": str(getattr(publisher, "cv_id", "")),
-            "name": getattr(publisher, "name", None),
+            "id": str(publisher.cv_id),
+            "name": publisher.name,
         }
 
     pull_payload = None
@@ -212,23 +217,19 @@ def issue_to_iissue(issue, pull=None):
         pull_payload = {
             "id": str(pull.id),
             "pulled": True,
-            "read": int(getattr(issue, "cv_id", 0)) in read_set,
-            "pull_list_id": (
-                str(getattr(pull, "pull_list_id", ""))
-                if getattr(pull, "pull_list_id", None)
-                else None
-            ),
+            "read": int(issue.cv_id) in read_set,
+            "pull_list_id": str(pull.pull_list_id) if pull.pull_list_id else None,
         }
 
     return {
-        "id": str(getattr(issue, "cv_id", "")),
-        "number": getattr(issue, "number", None),
-        "name": getattr(issue, "name", None),
+        "id": str(issue.cv_id),
+        "number": issue.number,
+        "name": issue.name,
         "title": title,
-        "date": getattr(issue, "date", None),
+        "date": issue.date,
         "images": _images_from_issue(issue),
-        "site_url": getattr(issue, "site_url", None),
-        "description": getattr(issue, "description", None),
+        "site_url": issue.site_url,
+        "description": issue.description,
         "volume": volume_payload,
         "pull": pull_payload,
     }
@@ -355,7 +356,7 @@ class PullViewSet(viewsets.ModelViewSet):
         pulls_by_id = {p.id: p for p in user_pulls}
         results = []
         for issue in page:
-            series_id = getattr(getattr(issue, "volume", None), "cv_id", None)
+            series_id = issue.volume.cv_id if issue.volume else None
             pull_tuple = series_to_pull.get(series_id)
             selected_pull = pulls_by_id.get(pull_tuple[1]) if pull_tuple else None
             # For unread endpoint, we can pass the Pull for context or minimal context if not found
@@ -394,6 +395,8 @@ class WeeksViewSet(viewsets.ViewSet):
 
         # Optionally prime from API (default: on) to ensure uncached issues are present
         prime = request.query_params.get("prime", "true").lower() != "false"
+        priming_info: dict = {"complete": True, "next_date": None, "next_page": None}
+        should_prime = False
         if prime:
             # Use a lightweight week cache to avoid repeated primes within the TTL
             from weeklypulls.apps.comicvine.models import ComicVineWeek
@@ -420,8 +423,8 @@ class WeeksViewSet(viewsets.ViewSet):
             if should_prime:
                 try:
                     # Use resume markers if present
-                    resume_date = getattr(week_cache, "next_date_to_prime", None)
-                    resume_page = getattr(week_cache, "current_day_page", 1) or 1
+                    resume_date = week_cache.next_date_to_prime if week_cache else None
+                    resume_page = week_cache.current_day_page if week_cache else 1
                     summary = ComicVineService().prime_issues_for_date_range(
                         start_date,
                         end_date,
@@ -434,6 +437,11 @@ class WeeksViewSet(viewsets.ViewSet):
                         summary,
                         req_id,
                     )
+                    priming_info = {
+                        "complete": bool(summary.get("complete", True)),
+                        "next_date": summary.get("next_date"),  # date or None
+                        "next_page": summary.get("next_page"),  # int or None
+                    }
                     # Mark or update cache entry; use shorter TTL when incomplete to retry soon
                     if not week_cache:
                         week_cache = ComicVineWeek(week_start=week_key)
@@ -468,6 +476,18 @@ class WeeksViewSet(viewsets.ViewSet):
                         week_cache.cache_expires = timezone.now() + timedelta(minutes=5)
                     week_cache.mark_api_failure()
                     week_cache.save()
+
+        # If no prime occurred, derive priming info from existing cache if present
+        if not (prime and should_prime):
+            try:
+                if "week_cache" in locals() and week_cache:
+                    priming_info = {
+                        "complete": week_cache.priming_complete,
+                        "next_date": week_cache.next_date_to_prime,
+                        "next_page": week_cache.current_day_page,
+                    }
+            except Exception:
+                pass
 
         # Discovery mode: return ALL issues in the Monday–Sunday range (inclusive)
         base_week_qs = ComicVineIssue.objects.filter(
@@ -519,7 +539,7 @@ class WeeksViewSet(viewsets.ViewSet):
         try:
             for issue in issues:
                 # Choose appropriate pull (if any) for this series
-                series_id = getattr(getattr(issue, "volume", None), "cv_id", None)
+                series_id = issue.volume.cv_id if issue.volume else None
                 pull_tuple = series_to_pull.get(series_id)
                 pull = pull_tuple[1] if pull_tuple else None
                 payload = issue_to_iissue(issue, pull=pull)
@@ -533,7 +553,13 @@ class WeeksViewSet(viewsets.ViewSet):
             )
             raise
 
-        serializer = WeekSerializer({"week_of": start_date, "comics": comics})
+        serializer = WeekSerializer(
+            {
+                "week_of": start_date,
+                "comics": comics,
+                "priming": priming_info,
+            }
+        )
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -584,11 +610,7 @@ class SeriesViewSet(viewsets.ViewSet):
 
         series_payload = {
             "series_id": str(volume.cv_id),
-            "title": (
-                volume.name
-                if not getattr(volume, "start_year", None)
-                else f"{volume.name}"
-            ),
+            "title": (volume.name if not volume.start_year else f"{volume.name}"),
             "comics": comics,
         }
         serializer = SeriesSerializer(series_payload)
