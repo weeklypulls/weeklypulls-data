@@ -140,7 +140,8 @@ class ComicVineWeek(ComicVineCacheModel):
     Weeks endpoint can skip re-priming from the API.
     """
 
-    week_start = models.DateField(primary_key=True)
+    id = models.BigAutoField(primary_key=True)
+    week_start = models.DateField(unique=True)
     # Whether the last priming attempt completed all needed API pages for the week
     priming_complete = models.BooleanField(default=False)
     # Resume markers: which date to prime next (within this week), and the last fully-fetched page for that date
