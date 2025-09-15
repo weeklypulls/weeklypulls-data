@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.contrib.admin import SimpleListFilter
+from django.contrib.admin.actions import delete_selected
 from django.db.models import Exists, OuterRef
 from django.utils.html import format_html
 from .models import ComicVineVolume, ComicVineIssue, ComicVinePublisher, ComicVineWeek
@@ -92,7 +93,9 @@ class ComicVinePublisherAdmin(admin.ModelAdmin):
 
 @admin.register(ComicVineWeek)
 class ComicVineWeekAdmin(admin.ModelAdmin):
+    actions = [delete_selected]
     list_display = (
+        "action_checkbox",
         "week_start",
         "priming_complete",
         "next_date_to_prime",
@@ -116,6 +119,18 @@ class ComicVineWeekAdmin(admin.ModelAdmin):
 
     is_cache_expired.boolean = True
     is_cache_expired.short_description = "Cache Expired"
+
+    # Render the action checkbox with ISO-8601 date value to avoid localization issues
+    def action_checkbox(self, obj):
+        from django.contrib.admin.helpers import ACTION_CHECKBOX_NAME
+
+        return format_html(
+            '<input type="checkbox" name="{}" value="{}" class="action-select" />',
+            ACTION_CHECKBOX_NAME,
+            obj.week_start.isoformat(),
+        )
+
+    action_checkbox.short_description = ""
 
 
 @admin.register(ComicVineIssue)
