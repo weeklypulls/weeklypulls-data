@@ -12,8 +12,8 @@ from simyan.comicvine import Comicvine
 from simyan.schemas.issue import BasicIssue
 from simyan.schemas.volume import Volume as CVVolume
 from simyan.schemas.generic_entries import GenericEntry as CVPublisher
-from simyan.sqlite_cache import SQLiteCache
-from simyan.exceptions import ServiceError
+from simyan.cache import SQLiteCache
+from simyan.errors import ServiceError
 
 from .models import ComicVineVolume, ComicVinePublisher
 
