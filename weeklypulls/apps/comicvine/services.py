@@ -295,13 +295,21 @@ class ComicVineService:
         """
         if not self.cv:
             return []
+        start = time.time()
         try:
-            return self.cv.list_issues(params=params)
+            result = self.cv.list_issues(params=params)
+            took_ms = int((time.time() - start) * 1000)
+            logger.info(
+                f"API SUCCESS: list_issues {params} - {len(result)} issues - {took_ms}ms"
+            )
+            return result
         except ServiceError as e:
-            logger.error(f"API ERROR list_issues: {e}")
+            took_ms = int((time.time() - start) * 1000)
+            logger.error(f"API ERROR list_issues {params}: {e} - {took_ms}ms")
             return []
         except Exception as e:
-            logger.error(f"Unexpected error in list_issues: {e}")
+            took_ms = int((time.time() - start) * 1000)
+            logger.error(f"Unexpected error in list_issues {params}: {e} - {took_ms}ms")
             return []
 
     def _get_or_create_publisher(
