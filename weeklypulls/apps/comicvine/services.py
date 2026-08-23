@@ -50,7 +50,7 @@ class ComicVineService:
             http_timeout = (
                 settings.COMICVINE_HTTP_TIMEOUT
                 if hasattr(settings, "COMICVINE_HTTP_TIMEOUT")
-                else 8
+                else 12
             )
             self.cv = Comicvine(api_key=self.api_key, timeout=http_timeout)
 
