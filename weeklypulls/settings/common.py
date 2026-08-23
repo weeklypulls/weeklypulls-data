@@ -173,12 +173,19 @@ LOGGING = {
             "formatter": "verbose",
         }
     },
+    # Catch-all for app loggers (e.g. weeklypulls.apps.*) that have no
+    # explicit entry below; without this, their INFO/DEBUG records have
+    # no handler anywhere in the chain and are silently dropped.
+    "root": {
+        "handlers": ["console"],
+        "level": os.getenv("DJANGO_LOG_LEVEL", "INFO"),
+    },
     "loggers": {
         # Core Django logs
         "django": {
             "handlers": ["console"],
             "level": os.getenv("DJANGO_LOG_LEVEL", "INFO"),
-            "propagate": True,
+            "propagate": False,
         },
         # Request/response errors (includes full tracebacks for 500s)
         "django.request": {
