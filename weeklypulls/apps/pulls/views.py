@@ -610,11 +610,16 @@ class SeriesViewSet(viewsets.ViewSet):
     permission_classes = (IsAuthenticated,)
 
     def list(self, request):
-        """Search ComicVine volumes (series) already cached locally.
-        Supports partial case-insensitive name search, publisher id filter,
-        start_year exact filter, and ordering by name/start_year.
-        Falls back to a live ComicVine lookup if there are no local results:
-        an exact id fetch for a numeric 'q', otherwise a live text search.
+        """Search ComicVine volumes (series).
+        By default searches the locally cached copy - supports partial
+        case-insensitive name search, publisher id filter, start_year exact
+        filter, and ordering by name/start_year. Falls back to a live
+        ComicVine lookup if there are no local results: an exact id fetch for
+        a numeric 'q', otherwise a live text search.
+        Pass live=true to search ComicVine directly instead (results are
+        still upserted into the local cache), for when the title you want
+        isn't cached but a *different* local match means the fallback above
+        never fires.
         """
         from weeklypulls.apps.comicvine.models import (
             ComicVineVolume,
@@ -622,57 +627,89 @@ class SeriesViewSet(viewsets.ViewSet):
         )
         from weeklypulls.apps.comicvine.services import ComicVineService
 
-        qs = ComicVineVolume.objects.select_related("publisher")
-
         q = (request.query_params.get("q") or "").strip()
-        if q:
-            if q.isdigit():
-                qs = qs.filter(cv_id=int(q)) | qs.filter(name__icontains=q)
-            else:
-                qs = qs.filter(name__icontains=q)
-
+        live = (request.query_params.get("live") or "").lower() in (
+            "1",
+            "true",
+            "yes",
+        )
         publisher_id = request.query_params.get("publisher")
-        if publisher_id:
-            try:
-                qs = qs.filter(publisher__cv_id=int(publisher_id))
-            except Exception:
-                pass
-
         year = request.query_params.get("year")
-        if year:
-            try:
-                qs = qs.filter(start_year=int(year))
-            except Exception:
-                pass
-
-        ordering = request.query_params.get("ordering") or "name"
-        order_fields = []
-        for token in ordering.split(","):
-            token = token.strip()
-            if token.lstrip("-") in {"name", "start_year"}:
-                order_fields.append(token)
-        if not order_fields:
-            order_fields = ["name", "start_year"]
-        qs = qs.order_by(*order_fields)
 
         try:
             limit = int(request.query_params.get("limit", "50"))
         except Exception:
             limit = 50
         limit = max(1, min(200, limit))
-        results = list(qs[:limit])
 
-        # If no local results, fall back to a live ComicVine lookup: an exact
-        # id fetch for a numeric query, otherwise a live text search - covers
-        # series that haven't been primed/cached locally yet (e.g. new titles).
-        if not results and q:
+        if live and q:
             svc = ComicVineService()
             if q.isdigit():
                 vol = svc.get_volume(int(q))
-                if vol:
-                    results = [vol]
+                results = [vol] if vol else []
             else:
                 results = svc.search_volumes(q, limit=limit)
+            if publisher_id:
+                try:
+                    pid = int(publisher_id)
+                    results = [
+                        v
+                        for v in results
+                        if v.publisher_id and v.publisher.cv_id == pid
+                    ]
+                except Exception:
+                    pass
+            if year:
+                try:
+                    y = int(year)
+                    results = [v for v in results if v.start_year == y]
+                except Exception:
+                    pass
+        else:
+            qs = ComicVineVolume.objects.select_related("publisher")
+
+            if q:
+                if q.isdigit():
+                    qs = qs.filter(cv_id=int(q)) | qs.filter(name__icontains=q)
+                else:
+                    qs = qs.filter(name__icontains=q)
+
+            if publisher_id:
+                try:
+                    qs = qs.filter(publisher__cv_id=int(publisher_id))
+                except Exception:
+                    pass
+
+            if year:
+                try:
+                    qs = qs.filter(start_year=int(year))
+                except Exception:
+                    pass
+
+            ordering = request.query_params.get("ordering") or "name"
+            order_fields = []
+            for token in ordering.split(","):
+                token = token.strip()
+                if token.lstrip("-") in {"name", "start_year"}:
+                    order_fields.append(token)
+            if not order_fields:
+                order_fields = ["name", "start_year"]
+            qs = qs.order_by(*order_fields)
+
+            results = list(qs[:limit])
+
+            # If no local results, fall back to a live ComicVine lookup: an
+            # exact id fetch for a numeric query, otherwise a live text
+            # search - covers series that haven't been primed/cached locally
+            # yet (e.g. new titles) when nothing else matches locally either.
+            if not results and q:
+                svc = ComicVineService()
+                if q.isdigit():
+                    vol = svc.get_volume(int(q))
+                    if vol:
+                        results = [vol]
+                else:
+                    results = svc.search_volumes(q, limit=limit)
 
         payload = []
         for v in results:
