@@ -174,112 +174,92 @@ class ComicVineService:
         start_page: int = 1,
         resume_date: Optional[datetime.date] = None,
     ) -> WeeklyPrimeSummary:
-        """Fetch and upsert all issues with store_date in [start_date, end_date]."""
+        """Fetch and upsert all issues with store_date in [start_date, end_date].
+
+        Uses a single ComicVine date-range filter (store_date:START|END) instead
+        of one query per day - the API supports range filters natively, and
+        simyan already paginates internally up to `max_results`. `start_page`
+        is reused here as an item offset (not a page number) so an interrupted
+        prime can resume mid-range without refetching already-processed issues.
+        """
         if not self.cv:
             logger.warning("ComicVine API not configured; skipping weekly prime")
             return {"created": 0, "updated": 0, "fetched": 0, "complete": True}
 
         from .models import ComicVineIssue
 
-        total_fetched = 0
-        created_count = 0
-        updated_count = 0
-        budget_exhausted = False
-
         budget_seconds = 10
         budget_start = time.time()
 
-        cur = resume_date or start_date
-        first_day = True
-        last_page_used = max(1, start_page)
-        resume_next_date = None
-        resume_next_page = 1
         volume_cache: dict[int, Optional[ComicVineVolume]] = {}
         delta_days = (timezone.now().date() - start_date).days
         weeks_back = max(0, delta_days // 7)
         ttl_days = weeks_back + 1
 
-        while cur <= end_date:
-            try:
-                page = max(1, start_page) if first_day else 1
-                day_fetched = 0
-                while True:
-                    if time.time() - budget_start > budget_seconds:
-                        budget_exhausted = True
-                        if resume_next_date is None:
-                            resume_next_date = cur
-                            resume_next_page = page
-                        break
+        range_start = resume_date or start_date
+        offset = max(0, start_page - 1)
+        # Cap at ComicVine's own per-page size (100) so simyan never chains
+        # more than one real HTTP call - and thus one rate-limit wait - per
+        # request. A range with more results than this resumes via next_page
+        # on a subsequent request instead of blocking longer here.
+        max_results = 100
 
-                    issues = self._list_issues(
-                        {
-                            "offset": (page - 1) * 500,
-                            "filter": f"store_date:{cur.strftime('%Y-%m-%d')}",
-                            "sort": "store_date:asc",
-                        }
+        issues = self._list_issues(
+            {
+                "offset": offset,
+                "filter": (
+                    f"store_date:{range_start.strftime('%Y-%m-%d')}"
+                    f"|{end_date.strftime('%Y-%m-%d')}"
+                ),
+                "sort": "store_date:asc",
+            },
+            max_results=max_results,
+        )
+
+        processed = 0
+        budget_exhausted = False
+        try:
+            for s_issue in issues:
+                if time.time() - budget_start > budget_seconds:
+                    budget_exhausted = True
+                    break
+
+                vol = s_issue.volume
+                vol_id = vol.id
+                vol_name = vol.name
+
+                volume = volume_cache.get(vol_id)
+                if volume is None:
+                    volume = self._ensure_volume(vol_id, vol_name, None)
+                    volume_cache[vol_id] = volume
+                if volume is not None:
+                    defaults, _, _ = self._build_issue_defaults(s_issue, volume)
+                    # Override per-issue cache TTL based on week recency
+                    defaults["cache_expires"] = timezone.now() + timedelta(
+                        days=ttl_days
+                    )
+                    ComicVineIssue.objects.update_or_create(
+                        cv_id=s_issue.id, defaults=defaults
                     )
 
-                    if not issues:
-                        break
+                processed += 1
+        except Exception as e:
+            logger.error(
+                f"Unexpected error processing weekly issues for {range_start}..{end_date}: {e}"
+            )
 
-                    day_fetched += len(issues)
-                    for s_issue in issues:
-                        if time.time() - budget_start > budget_seconds:
-                            # Stop resolving new volumes; the outer loop's own
-                            # budget check will set budget_exhausted and the
-                            # resume markers on its next iteration.
-                            break
+        # If we hit max_results, there may be more beyond this batch even
+        # though we processed all of it without running out of budget.
+        more_available = len(issues) >= max_results
+        complete = not budget_exhausted and not more_available
 
-                        vol = s_issue.volume
-                        vol_id = vol.id
-                        vol_name = vol.name
-
-                        volume = volume_cache.get(vol_id)
-                        if volume is None:
-                            volume = self._ensure_volume(vol_id, vol_name, None)
-                            volume_cache[vol_id] = volume
-                        if volume is None:
-                            continue
-
-                        defaults, _, _ = self._build_issue_defaults(s_issue, volume)
-                        # Override per-issue cache TTL based on week recency
-                        defaults["cache_expires"] = timezone.now() + timedelta(
-                            days=ttl_days
-                        )
-                        ComicVineIssue.objects.update_or_create(
-                            cv_id=s_issue.id, defaults=defaults
-                        )
-
-                    last_page_used = page
-                    if len(issues) < 500:
-                        break
-                    page += 1
-
-                total_fetched += day_fetched
-            except ServiceError as e:
-                logger.error(f"API ERROR: weekly issues for {cur}: {e}")
-            except Exception as e:
-                logger.error(f"Unexpected error fetching weekly issues for {cur}: {e}")
-
-            first_day = False
-            start_page = 1
-            cur += datetime.timedelta(days=1)
-
-            if time.time() - budget_start > budget_seconds:
-                budget_exhausted = True
-                if resume_next_date is None:
-                    resume_next_date = cur
-                    resume_next_page = 1
-                break
-
-        complete = not budget_exhausted
         summary = {
-            "created": created_count,
-            "updated": updated_count,
-            "fetched": total_fetched,
+            "created": 0,
+            "updated": 0,
+            "fetched": processed,
             "complete": complete,
-            "next_page": 1 if complete else (resume_next_page or (last_page_used + 1)),
-            "next_date": None if complete else resume_next_date,
+            "next_page": 1 if complete else offset + processed + 1,
+            "next_date": None if complete else range_start,
         }
         logger.info(
             f"Weekly prime {start_date}..{end_date}: {summary['fetched']} fetched"
@@ -295,7 +275,9 @@ class ComicVineService:
             return timezone.make_aware(dt, datetime.timezone.utc)
         return dt.astimezone(datetime.timezone.utc)
 
-    def _list_issues(self, params: Dict[str, Any]) -> List[BasicIssue]:
+    def _list_issues(
+        self, params: Dict[str, Any], max_results: int = 500
+    ) -> List[BasicIssue]:
         """Call Simyan list_issues, retrying once without cache if the SQLite cache
         raises a UNIQUE constraint error (seen under concurrency).
         """
@@ -303,7 +285,7 @@ class ComicVineService:
             return []
         start = time.time()
         try:
-            result = self.cv.list_issues(params=params)
+            result = self.cv.list_issues(params=params, max_results=max_results)
             took_ms = int((time.time() - start) * 1000)
             logger.info(
                 f"API SUCCESS: list_issues {params} - {len(result)} issues - {took_ms}ms"
