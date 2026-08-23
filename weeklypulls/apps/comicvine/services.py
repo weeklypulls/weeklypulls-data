@@ -47,12 +47,12 @@ class ComicVineService:
             logger.error("ComicVine API key not configured")
             self.cv = None
         else:
-            self.cv = Comicvine(api_key=self.api_key)
-            self.cv.timeout = (
+            http_timeout = (
                 settings.COMICVINE_HTTP_TIMEOUT
                 if hasattr(settings, "COMICVINE_HTTP_TIMEOUT")
                 else 8
             )
+            self.cv = Comicvine(api_key=self.api_key, timeout=http_timeout)
 
     # -------------------------
     # Public API
