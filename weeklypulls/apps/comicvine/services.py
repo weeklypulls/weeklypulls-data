@@ -197,6 +197,10 @@ class ComicVineService:
         ttl_days = weeks_back + 1
 
         range_start = resume_date or start_date
+        if range_start > end_date:
+            # Stale resume marker (e.g. from before this range-query rewrite,
+            # when next_date could be end_date + 1) - nothing left to fetch.
+            return {"created": 0, "updated": 0, "fetched": 0, "complete": True}
         offset = max(0, start_page - 1)
         # Cap at ComicVine's own per-page size (100) so simyan never chains
         # more than one real HTTP call - and thus one rate-limit wait - per
