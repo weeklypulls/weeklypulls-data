@@ -89,6 +89,19 @@ class PullSerializer(serializers.HyperlinkedModelSerializer):
         )
 
 
+class VolumeSearchPublisherSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+
+
+class VolumeSearchSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+    start_year = serializers.IntegerField(allow_null=True, required=False)
+    issue_count = serializers.IntegerField()
+    publisher = VolumeSearchPublisherSerializer(allow_null=True)
+
+
 class PublisherSerializer(serializers.Serializer):
     id = serializers.CharField()
     name = serializers.CharField()
@@ -571,6 +584,84 @@ class SeriesSerializer(serializers.Serializer):
 
 class SeriesViewSet(viewsets.ViewSet):
     permission_classes = (IsAuthenticated,)
+
+    def list(self, request):
+        """Search ComicVine volumes (series) already cached locally.
+        Supports partial case-insensitive name search, publisher id filter,
+        start_year exact filter, and ordering by name/start_year.
+        Falls back to attempting a live fetch (get_volume) if no local
+        results and a numeric 'q' provided.
+        """
+        from weeklypulls.apps.comicvine.models import (
+            ComicVineVolume,
+            ComicVinePublisher,
+        )
+        from weeklypulls.apps.comicvine.services import ComicVineService
+
+        qs = ComicVineVolume.objects.select_related("publisher")
+
+        q = (request.query_params.get("q") or "").strip()
+        if q:
+            if q.isdigit():
+                qs = qs.filter(cv_id=int(q)) | qs.filter(name__icontains=q)
+            else:
+                qs = qs.filter(name__icontains=q)
+
+        publisher_id = request.query_params.get("publisher")
+        if publisher_id:
+            try:
+                qs = qs.filter(publisher__cv_id=int(publisher_id))
+            except Exception:
+                pass
+
+        year = request.query_params.get("year")
+        if year:
+            try:
+                qs = qs.filter(start_year=int(year))
+            except Exception:
+                pass
+
+        ordering = request.query_params.get("ordering") or "name"
+        order_fields = []
+        for token in ordering.split(","):
+            token = token.strip()
+            if token.lstrip("-") in {"name", "start_year"}:
+                order_fields.append(token)
+        if not order_fields:
+            order_fields = ["name", "start_year"]
+        qs = qs.order_by(*order_fields)
+
+        try:
+            limit = int(request.query_params.get("limit", "50"))
+        except Exception:
+            limit = 50
+        limit = max(1, min(200, limit))
+        results = list(qs[:limit])
+
+        # If no local results but numeric q, attempt fetch
+        if not results and q.isdigit():
+            svc = ComicVineService()
+            vol = svc.get_volume(int(q))
+            if vol:
+                results = [vol]
+
+        payload = []
+        for v in results:
+            payload.append(
+                {
+                    "id": v.cv_id,
+                    "name": v.name,
+                    "start_year": v.start_year,
+                    "issue_count": v.count_of_issues,
+                    "publisher": (
+                        {"id": v.publisher.cv_id, "name": v.publisher.name}
+                        if v.publisher
+                        else None
+                    ),
+                }
+            )
+
+        return Response({"results": payload}, status=status.HTTP_200_OK)
 
     def retrieve(self, request, pk=None):
         """Return ComicVine volume details and issues for a given series (volume cv_id)."""
