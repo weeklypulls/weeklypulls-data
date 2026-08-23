@@ -224,6 +224,12 @@ class ComicVineService:
 
                     day_fetched += len(issues)
                     for s_issue in issues:
+                        if time.time() - budget_start > budget_seconds:
+                            # Stop resolving new volumes; the outer loop's own
+                            # budget check will set budget_exhausted and the
+                            # resume markers on its next iteration.
+                            break
+
                         vol = s_issue.volume
                         vol_id = vol.id
                         vol_name = vol.name
