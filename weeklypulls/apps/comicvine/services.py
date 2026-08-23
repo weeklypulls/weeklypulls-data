@@ -109,6 +109,43 @@ class ComicVineService:
         volume.save()
         return volume
 
+    def search_volumes(self, query: str, limit: int = 20) -> List[ComicVineVolume]:
+        """Live-search ComicVine for volumes by name and upsert results into the cache.
+
+        Used as a fallback when a text search finds nothing locally - e.g. a
+        newly launched series that's never been primed/cached yet.
+        """
+        if not self.cv:
+            logger.error("ComicVine API not configured")
+            return []
+
+        start = time.time()
+        try:
+            cv_volumes = self.cv.search_volumes(query, max_results=limit)
+            took_ms = int((time.time() - start) * 1000)
+            logger.info(
+                f"API SUCCESS: search_volumes '{query}' - {len(cv_volumes)} results - {took_ms}ms"
+            )
+        except ServiceError as e:
+            took_ms = int((time.time() - start) * 1000)
+            logger.error(f"API ERROR: search_volumes '{query}': {e} - {took_ms}ms")
+            return []
+        except Exception as e:
+            took_ms = int((time.time() - start) * 1000)
+            logger.error(
+                f"Unexpected error in search_volumes '{query}': {e} - {took_ms}ms"
+            )
+            return []
+
+        volumes = []
+        for cv_volume in cv_volumes:
+            try:
+                existing = ComicVineVolume.objects.filter(cv_id=cv_volume.id).first()
+                volumes.append(self._apply_cv_volume_payload(existing, cv_volume))
+            except Exception as e:
+                logger.error(f"Error upserting searched volume {cv_volume.id}: {e}")
+        return volumes
+
     def get_volume_issues(self, volume_id: int) -> List[Dict[str, Any]]:
         """Fetch issues for a volume and upsert them."""
         if not self.cv:

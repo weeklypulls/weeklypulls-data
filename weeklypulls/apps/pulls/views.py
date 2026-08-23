@@ -613,8 +613,8 @@ class SeriesViewSet(viewsets.ViewSet):
         """Search ComicVine volumes (series) already cached locally.
         Supports partial case-insensitive name search, publisher id filter,
         start_year exact filter, and ordering by name/start_year.
-        Falls back to attempting a live fetch (get_volume) if no local
-        results and a numeric 'q' provided.
+        Falls back to a live ComicVine lookup if there are no local results:
+        an exact id fetch for a numeric 'q', otherwise a live text search.
         """
         from weeklypulls.apps.comicvine.models import (
             ComicVineVolume,
@@ -662,12 +662,17 @@ class SeriesViewSet(viewsets.ViewSet):
         limit = max(1, min(200, limit))
         results = list(qs[:limit])
 
-        # If no local results but numeric q, attempt fetch
-        if not results and q.isdigit():
+        # If no local results, fall back to a live ComicVine lookup: an exact
+        # id fetch for a numeric query, otherwise a live text search - covers
+        # series that haven't been primed/cached locally yet (e.g. new titles).
+        if not results and q:
             svc = ComicVineService()
-            vol = svc.get_volume(int(q))
-            if vol:
-                results = [vol]
+            if q.isdigit():
+                vol = svc.get_volume(int(q))
+                if vol:
+                    results = [vol]
+            else:
+                results = svc.search_volumes(q, limit=limit)
 
         payload = []
         for v in results:
