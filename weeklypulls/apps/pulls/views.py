@@ -1,7 +1,8 @@
 from django.http import Http404
 import logging
-from django.db.models import Q, F
+from django.db.models import OuterRef, Q, F, Subquery
 from django.db.models.functions import Coalesce
+from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.mixins import CreateModelMixin
 from rest_framework.request import clone_request
 from rest_framework.response import Response
@@ -255,7 +256,30 @@ class PullViewSet(viewsets.ModelViewSet):
     owner_lookup_field = "pull_list__owner"
 
     permission_classes = (IsPullListOwner,)
-    filter_backends = (IsOwnerFilterBackend,)
+    filter_backends = (IsOwnerFilterBackend, SearchFilter, OrderingFilter)
+    pagination_class = StandardResultsPagination
+    search_fields = ("series_title", "pull_list__title")
+    ordering_fields = (
+        "series_title",
+        "series_start_year",
+        "pull_list__title",
+        "created_at",
+    )
+    ordering = ("series_title",)
+
+    def get_queryset(self):
+        # Annotate series_title/series_start_year (joined by cv_id, not a real FK) so
+        # OrderingFilter/SearchFilter can sort/search on them at the DB level.
+        volumes = ComicVineVolume.objects.filter(cv_id=OuterRef("series_id"))
+        return (
+            super()
+            .get_queryset()
+            .select_related("pull_list")
+            .annotate(
+                series_title=Subquery(volumes.values("name")[:1]),
+                series_start_year=Subquery(volumes.values("start_year")[:1]),
+            )
+        )
 
     def create(self, request, *args, **kwargs):
         """overridden to allow for bulk-creation."""
