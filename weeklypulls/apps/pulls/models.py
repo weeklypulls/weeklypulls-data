@@ -78,7 +78,7 @@ class MUPullAlert(AbstractBaseModel):
         :param publication_date: Date/Arrow object or string
         :return: created MUPullAlert
         """
-        alert_date = arrow.get(publication_date).replace(months=+6)
+        alert_date = arrow.get(publication_date).shift(months=+6)
         alert = MUPullAlert.objects.create(
             series_id=series_id, issue_id=issue_id, alert_date=alert_date.date()
         )
