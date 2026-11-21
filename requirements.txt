@@ -14,5 +14,3 @@ django-cache-url>=3.4.4
 simyan>=3.1,<4
 requests>=2.32.3
 python-dateutil>=2.9.0.post0,<3
-safety
-black>=24.8.0
