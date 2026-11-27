@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: weeklypulls
+          POSTGRES_PASSWORD: weeklypulls
+          POSTGRES_DB: weeklypulls
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U weeklypulls"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://weeklypulls:weeklypulls@localhost:5432/weeklypulls
+      DJANGO_SECRET_KEY: ci-only-not-a-secret
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: .python-version
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-testing.txt
+
+      # Install only the runtime requirements first and build the way Railway
+      # does, so a dependency missing from requirements.txt fails here rather
+      # than in the deploy.
+      - name: Install runtime requirements
+        run: pip install -r requirements.txt
+
+      - name: Production build checks
+        env:
+          WP_PROD: "1"
+        run: |
+          python manage.py collectstatic --noinput
+          python manage.py check --deploy --fail-level ERROR
+          python manage.py migrate --noinput
+          python manage.py makemigrations --check --dry-run
+
+      - name: Install test requirements
+        run: pip install -r requirements-testing.txt
+
+      - name: Black
+        run: black --check .
+
+      - name: Tests
+        run: pytest

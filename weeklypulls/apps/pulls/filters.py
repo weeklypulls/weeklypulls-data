@@ -5,7 +5,6 @@ except Exception:  # pragma: no cover - optional in dev before deps installed
 
 from weeklypulls.apps.comicvine.models import ComicVineIssue
 
-
 if django_filters is not None:
 
     class IssueFilter(django_filters.FilterSet):
