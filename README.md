@@ -10,8 +10,7 @@ Requires Python 3.13 and Postgres.
 ```sh
 python3.13 -m venv .venv && source .venv/bin/activate
 make install
-cp dotenv_sample .env   # then edit
-set -a; source .env; set +a
+cp dotenv_sample .env   # then edit; settings load it automatically
 python manage.py migrate
 make run
 ```
