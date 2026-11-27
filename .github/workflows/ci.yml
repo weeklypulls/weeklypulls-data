@@ -47,7 +47,7 @@ jobs:
             requirements.txt
             requirements-testing.txt
 
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
 
       - name: Pinned requirements match the .in files
         run: |
