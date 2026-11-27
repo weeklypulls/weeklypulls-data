@@ -11,6 +11,7 @@ from allauth.account.adapter import DefaultAccountAdapter
 from django.conf import settings
 from dj_rest_auth.serializers import PasswordResetSerializer
 from rest_framework.authtoken.views import ObtainAuthToken
+from rest_framework.settings import api_settings
 
 
 def frontend_url(path: str) -> str:
@@ -35,7 +36,10 @@ class FrontendPasswordResetSerializer(PasswordResetSerializer):
 
 class VerifiedObtainAuthToken(ObtainAuthToken):
     """The old token endpoint, kept for clients loaded before the switch to
-    auth/login/, but with the same verified-email check."""
+    auth/login/, but with the same verified-email check and rate limits
+    (ObtainAuthToken turns throttling off by default)."""
+
+    throttle_classes = api_settings.DEFAULT_THROTTLE_CLASSES
 
     def post(self, request, *args, **kwargs):
         from dj_rest_auth.serializers import LoginSerializer

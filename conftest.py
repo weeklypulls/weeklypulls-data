@@ -7,6 +7,14 @@ def enable_db_access_for_all_tests(db):
     pass
 
 
+@pytest.fixture(autouse=True)
+def clear_cache():
+    # Rate-limit counters live in the cache; don't carry them between tests.
+    from django.core.cache import cache
+
+    cache.clear()
+
+
 @pytest.fixture
 def api_client(django_user_model):
     username = "user1"

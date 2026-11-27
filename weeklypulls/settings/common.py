@@ -43,6 +43,26 @@ REST_FRAMEWORK = {
         "django_filters.rest_framework.DjangoFilterBackend",
         "rest_framework.filters.OrderingFilter",
     ],
+    # Only the logged-out account endpoints are limited; see
+    # apps/base/throttles.py. "_ip" is per client IP, "_id" per username or
+    # email address.
+    "DEFAULT_THROTTLE_CLASSES": [
+        "weeklypulls.apps.base.throttles.AuthIPThrottle",
+        "weeklypulls.apps.base.throttles.AuthIdentityThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "login_ip": "10/min",
+        "login_id": "20/hour",
+        "register_ip": "10/hour",
+        "register_id": "3/hour",
+        "password_reset_ip": "10/hour",
+        "password_reset_id": "3/hour",
+        "password_reset_confirm_ip": "20/hour",
+        "password_reset_confirm_id": "10/hour",
+        "resend_email_ip": "10/hour",
+        "resend_email_id": "3/hour",
+        "verify_email_ip": "30/hour",
+    },
 }
 
 MIDDLEWARE = [
