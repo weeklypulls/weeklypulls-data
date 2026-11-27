@@ -62,6 +62,9 @@ REST_FRAMEWORK = {
         "resend_email_ip": "10/hour",
         "resend_email_id": "3/hour",
         "verify_email_ip": "30/hour",
+        # Logged in, but these check the current password.
+        "password_change_ip": "10/hour",
+        "account_delete_ip": "10/hour",
     },
 }
 
@@ -195,9 +198,16 @@ ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_EMAIL_VERIFICATION = "mandatory"
 ACCOUNT_EMAIL_SUBJECT_PREFIX = "WeeklyPulls: "
 REST_AUTH = {
+    "LOGIN_SERIALIZER": "weeklypulls.apps.base.accounts.TrackingLoginSerializer",
     "PASSWORD_RESET_SERIALIZER": (
         "weeklypulls.apps.base.accounts.FrontendPasswordResetSerializer"
     ),
+    "USER_DETAILS_SERIALIZER": (
+        "weeklypulls.apps.base.account_views.UserDetailsSerializer"
+    ),
+    # Changing your password needs the current one, so a stolen token alone
+    # can't take over the account.
+    "OLD_PASSWORD_FIELD_ENABLED": True,
     # Token auth only; the client never uses the session cookie.
     "SESSION_LOGIN": False,
 }

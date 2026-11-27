@@ -1,4 +1,5 @@
-"""Rate limits for the logged-out account endpoints.
+"""Rate limits for the account endpoints: the logged-out ones, plus the two
+logged-in ones that check your current password.
 
 Each endpoint gets two limits: one per client IP, and one per account
 identity (the username for logins, the email address for reset and
@@ -28,6 +29,8 @@ AUTH_ACTIONS = {
     "PasswordResetConfirmView": ("password_reset_confirm", "uid"),
     "ResendEmailVerificationView": ("resend_email", "email"),
     "VerifyEmailView": ("verify_email", None),
+    "PasswordChangeView": ("password_change", None),
+    "AccountDeleteView": ("account_delete", None),
 }
 
 

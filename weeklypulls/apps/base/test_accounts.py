@@ -83,6 +83,7 @@ def test_signup_requires_verification_before_login(client):
     assert response.status_code == 200, response.data
     user = User.objects.get(username="newuser")
     assert response.data["key"] == user.auth_token.key
+    assert user.last_login is not None
 
 
 def test_signup_requires_email(client):

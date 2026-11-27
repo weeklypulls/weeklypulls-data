@@ -9,7 +9,8 @@ links go to client routes, which post the key or token back to dj-rest-auth:
 
 from allauth.account.adapter import DefaultAccountAdapter
 from django.conf import settings
-from dj_rest_auth.serializers import PasswordResetSerializer
+from django.contrib.auth.models import update_last_login
+from dj_rest_auth.serializers import LoginSerializer, PasswordResetSerializer
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.settings import api_settings
 
@@ -34,6 +35,16 @@ class FrontendPasswordResetSerializer(PasswordResetSerializer):
         return {"url_generator": _reset_url}
 
 
+class TrackingLoginSerializer(LoginSerializer):
+    """Records last_login, which Django's session login would normally do
+    (dj-rest-auth skips it with SESSION_LOGIN off)."""
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        update_last_login(None, attrs["user"])
+        return attrs
+
+
 class VerifiedObtainAuthToken(ObtainAuthToken):
     """The old token endpoint, kept for clients loaded before the switch to
     auth/login/, but with the same verified-email check and rate limits
@@ -42,11 +53,10 @@ class VerifiedObtainAuthToken(ObtainAuthToken):
     throttle_classes = api_settings.DEFAULT_THROTTLE_CLASSES
 
     def post(self, request, *args, **kwargs):
-        from dj_rest_auth.serializers import LoginSerializer
-
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         LoginSerializer.validate_email_verification_status(
             serializer.validated_data["user"]
         )
+        update_last_login(None, serializer.validated_data["user"])
         return super().post(request, *args, **kwargs)
