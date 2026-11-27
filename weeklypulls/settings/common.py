@@ -140,23 +140,30 @@ CACHE_MIDDLEWARE_ALIAS = "weeklypulls"
 CACHE_MIDDLEWARE_SECONDS = 300  # seconds
 CACHE_MIDDLEWARE_KEY_PREFIX = "wps_"
 
-# email config
-DEFAULT_FROM_EMAIL = "WeeklyPulls <staff@weeklypulls.com>"
-# Email prints to the console unless EMAIL_BACKEND is set (e.g. to the SMTP backend).
-_email_backend = os.environ.get(
-    "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
+# Email. With EMAIL_HOST set (Amazon SES SMTP on Railway) mail goes out over
+# SMTP; without it, emails print to the console (local dev, CI).
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL", "WeeklyPulls <noreply@weeklypulls.com>"
 )
-_email_options = {}
-if _email_backend == "django.core.mail.backends.smtp.EmailBackend":
-    _email_options = {
-        "host": os.environ.get("EMAIL_HOST", "smtp.sendgrid.net"),
-        "port": int(os.environ.get("EMAIL_PORT", 587)),
-        "username": os.environ.get("EMAIL_HOST_USER", ""),
-        "password": os.environ.get("EMAIL_HOST_PASSWORD", ""),
-        "use_tls": os.environ.get("EMAIL_USE_TLS", "true").lower()
-        in ("1", "true", "yes"),
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
+if _smtp_host := os.environ.get("EMAIL_HOST"):
+    MAILERS = {
+        "default": {
+            "BACKEND": "django.core.mail.backends.smtp.EmailBackend",
+            "OPTIONS": {
+                "host": _smtp_host,
+                "port": int(os.environ.get("EMAIL_PORT", "587")),
+                "username": os.environ.get("EMAIL_HOST_USER", ""),
+                "password": os.environ.get("EMAIL_HOST_PASSWORD", ""),
+                "use_tls": os.environ.get("EMAIL_USE_TLS", "true").lower()
+                in ("1", "true", "yes"),
+                # Keep a slow or unreachable mail server from hanging a worker.
+                "timeout": int(os.environ.get("EMAIL_TIMEOUT", "10")),
+            },
+        }
     }
-MAILERS = {"default": {"BACKEND": _email_backend, "OPTIONS": _email_options}}
+else:
+    MAILERS = {"default": {"BACKEND": "django.core.mail.backends.console.EmailBackend"}}
 
 # Allauth/dj-rest-auth: turn off email verification while email is disabled
 ACCOUNT_SIGNUP_FIELDS = ["email", "username*", "password1*", "password2*"]

@@ -1,3 +1,5 @@
+import os
+
 from .common import *
 from .sentry import init_sentry
 
@@ -25,6 +27,6 @@ SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 SECURE_HSTS_SECONDS = 60 * 60 * 24 * 365
 
-# Email is deliberately off (console backend) until a provider is set up via
-# EMAIL_BACKEND; see common.py.
-SILENCED_SYSTEM_CHECKS = ["mail.E001"]
+# Until EMAIL_HOST is set on Railway, email prints to the console; see common.py.
+if not os.environ.get("EMAIL_HOST"):
+    SILENCED_SYSTEM_CHECKS = ["mail.E001"]

@@ -35,6 +35,14 @@ Production settings are the default; `DJANGO_DEBUG=true` (in your local `.env`) 
 development settings. `/health/` is Railway's health check. Add any new client origin to
 `CORS_ALLOWED_ORIGINS` in `weeklypulls/settings/production.py`.
 
+## Email
+
+Sent through Amazon SES's SMTP interface when `EMAIL_HOST` is set on Railway
+(`email-smtp.us-east-1.amazonaws.com`, with `EMAIL_HOST_USER` / `EMAIL_HOST_PASSWORD`
+as SES SMTP credentials); otherwise emails print to the console. `DEFAULT_FROM_EMAIL`
+defaults to `WeeklyPulls <noreply@weeklypulls.com>`. To send a test message from
+production: `railway ssh -s data -- python manage.py sendtestemail you@example.com`.
+
 ## primecache
 
 Refreshes cached ComicVine volumes and issues within the API's rate limits
