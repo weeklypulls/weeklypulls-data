@@ -43,6 +43,15 @@ as SES SMTP credentials); otherwise emails print to the console. `DEFAULT_FROM_E
 defaults to `WeeklyPulls <noreply@weeklypulls.com>`. To send a test message from
 production: `railway ssh -s data -- python manage.py sendtestemail you@example.com`.
 
+## Accounts
+
+Sign-up, login and password reset go through dj-rest-auth (`/auth/...`). New
+accounts must verify their email before they can log in. The links in account
+emails point at the client (`FRONTEND_URL`, default `https://weeklypulls.com`;
+`http://localhost:3000` with `DJANGO_DEBUG`): `/verify-email/<key>` and
+`/reset-password/<uid>/<token>`, which post back to the API. See
+`weeklypulls/apps/base/accounts.py`.
+
 ## primecache
 
 Refreshes cached ComicVine volumes and issues within the API's rate limits

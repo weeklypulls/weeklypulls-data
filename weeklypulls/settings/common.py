@@ -165,9 +165,22 @@ if _smtp_host := os.environ.get("EMAIL_HOST"):
 else:
     MAILERS = {"default": {"BACKEND": "django.core.mail.backends.console.EmailBackend"}}
 
-# Allauth/dj-rest-auth: turn off email verification while email is disabled
-ACCOUNT_SIGNUP_FIELDS = ["email", "username*", "password1*", "password2*"]
-ACCOUNT_EMAIL_VERIFICATION = "none"
+# Accounts (allauth + dj-rest-auth). New accounts need a verified email before
+# they can log in; account emails link to the React client (see
+# apps/base/accounts.py).
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://weeklypulls.com")
+ACCOUNT_ADAPTER = "weeklypulls.apps.base.accounts.AccountAdapter"
+ACCOUNT_SIGNUP_FIELDS = ["email*", "username*", "password1*", "password2*"]
+ACCOUNT_UNIQUE_EMAIL = True
+ACCOUNT_EMAIL_VERIFICATION = "mandatory"
+ACCOUNT_EMAIL_SUBJECT_PREFIX = "WeeklyPulls: "
+REST_AUTH = {
+    "PASSWORD_RESET_SERIALIZER": (
+        "weeklypulls.apps.base.accounts.FrontendPasswordResetSerializer"
+    ),
+    # Token auth only; the client never uses the session cookie.
+    "SESSION_LOGIN": False,
+}
 
 
 # ComicVine API configuration
