@@ -3,12 +3,11 @@ import logging
 from django.db.models import OuterRef, Q, F, Subquery
 from django.db.models.functions import Coalesce
 from rest_framework.filters import OrderingFilter, SearchFilter
-from rest_framework.mixins import CreateModelMixin
 from rest_framework.request import clone_request
 from rest_framework.response import Response
 from rest_framework.decorators import action
 
-from weeklypulls.apps.pulls.models import Pull, MUPull
+from weeklypulls.apps.pulls.models import Pull
 from weeklypulls.apps.comicvine.models import ComicVineIssue, ComicVineVolume
 from rest_framework import routers, serializers, viewsets, status
 from rest_framework.permissions import IsAuthenticated
@@ -770,44 +769,8 @@ class SeriesViewSet(viewsets.ViewSet):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-class MUPullSerializer(serializers.HyperlinkedModelSerializer):
-    pull_list_id = serializers.PrimaryKeyRelatedField(
-        source="pull_list", queryset=PullList.objects.all()
-    )
-
-    class Meta:
-        model = MUPull
-        fields = (
-            "id",
-            "series_id",
-            "pull_list_id",
-        )
-
-
-class MUPullViewSet(viewsets.ModelViewSet, CreateModelMixin):
-    queryset = MUPull.objects.all()
-    serializer_class = MUPullSerializer
-
-    owner_lookup_field = "pull_list__owner"
-
-    permission_classes = (IsAuthenticated, IsPullListOwner)
-    filter_backends = (IsOwnerFilterBackend,)
-
-    def create(self, request, *args, **kwargs):
-        """overridden to allow for bulk-creation."""
-        is_multiple = isinstance(request.data, list)
-        serializer = self.get_serializer(data=request.data, many=is_multiple)
-        serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
-        return Response(
-            serializer.data, status=status.HTTP_201_CREATED, headers=headers
-        )
-
-
 router = routers.DefaultRouter()
 router.register(r"pulls", PullViewSet)
-router.register(r"mupulls", MUPullViewSet)
 # Register new weeks and series routes
 router.register(r"weeks", WeeksViewSet, basename="weeks")
 router.register(r"series", SeriesViewSet, basename="series")

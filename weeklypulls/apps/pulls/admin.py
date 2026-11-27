@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.db.models import OuterRef, Subquery
-from weeklypulls.apps.pulls.models import Pull, MUPull, MUPullAlert
+from weeklypulls.apps.pulls.models import Pull
 
 
 class PullsAdmin(admin.ModelAdmin):
@@ -51,5 +51,3 @@ class PullsAdmin(admin.ModelAdmin):
 
 
 admin.site.register(Pull, PullsAdmin)
-admin.site.register(MUPull)
-admin.site.register(MUPullAlert)

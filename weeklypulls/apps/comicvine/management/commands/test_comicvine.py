@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from weeklypulls.apps.comicvine.services import ComicVineService
-from weeklypulls.apps.pulls.models import Pull, MUPull
+from weeklypulls.apps.pulls.models import Pull
 
 
 class Command(BaseCommand):
@@ -64,10 +64,8 @@ class Command(BaseCommand):
                 f"Starting {action} of all volumes from existing pulls..."
             )
 
-            # Get all unique series IDs from Pull and MUPull (these are now ComicVine volume IDs)
-            pull_volumes = set(Pull.objects.values_list("series_id", flat=True))
-            mupull_volumes = set(MUPull.objects.values_list("series_id", flat=True))
-            all_volumes = pull_volumes.union(mupull_volumes)
+            # Get all unique series IDs (ComicVine volume IDs) from pulls
+            all_volumes = set(Pull.objects.values_list("series_id", flat=True))
 
             if options["force_refresh_all"]:
                 # Force refresh all volumes

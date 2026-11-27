@@ -1,5 +1,5 @@
 import pytest
-from rest_framework.test import APIClient, RequestsClient
+from rest_framework.test import APIClient
 
 
 @pytest.fixture(autouse=True)
@@ -15,14 +15,4 @@ def api_client(django_user_model):
     client = APIClient()
     client.login(username=username, password=password)
     client.credentials(HTTP_AUTHORIZATION="TOKEN " + user.auth_token.key)
-    return client
-
-
-@pytest.fixture
-def requests_client(django_user_model):
-    username = "user1"
-    password = "password1"
-    user = django_user_model.objects.create_user(username=username, password=password)
-    client = RequestsClient()
-    client.headers.update({"Authorization": f"TOKEN {user.auth_token.key}"})
     return client

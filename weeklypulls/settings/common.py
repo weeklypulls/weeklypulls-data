@@ -156,8 +156,6 @@ MAILERS = {"default": {"BACKEND": _email_backend, "OPTIONS": _email_options}}
 ACCOUNT_SIGNUP_FIELDS = ["email", "username*", "password1*", "password2*"]
 ACCOUNT_EMAIL_VERIFICATION = "none"
 
-# location of weeklypulls-marvel (deprecated)
-MAPI_URL = os.getenv("MAPI_URL", "https://weeklypulls-marvel.herokuapp.com")
 
 # ComicVine API configuration
 COMICVINE_API_KEY = os.getenv("COMICVINE_API_KEY", "")
