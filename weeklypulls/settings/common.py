@@ -81,7 +81,9 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "weeklypulls.wsgi.application"
 
-db_from_env = dj_database_url.config()
+# Reuse connections across requests, and check them before reuse so a
+# restarted database doesn't surface as errors.
+db_from_env = dj_database_url.config(conn_max_age=600, conn_health_checks=True)
 db_from_env["TEST"] = {"NAME": "wptest"}
 DATABASES = {
     "default": db_from_env,

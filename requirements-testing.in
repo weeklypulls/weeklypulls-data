@@ -1,0 +1,4 @@
+-c requirements.txt
+pytest>=9.2
+pytest-django>=4.11.1
+black==26.10.1

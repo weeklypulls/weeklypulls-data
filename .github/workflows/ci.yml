@@ -47,15 +47,22 @@ jobs:
             requirements.txt
             requirements-testing.txt
 
+      - uses: astral-sh/setup-uv@v10
+
+      - name: Pinned requirements match the .in files
+        run: |
+          make lock
+          git diff --exit-code -- requirements.txt requirements-testing.txt \
+            || { echo "::error::requirements*.txt are out of date; run 'make lock' and commit"; exit 1; }
+
       # Install only the runtime requirements first and build the way Railway
       # does, so a dependency missing from requirements.txt fails here rather
       # than in the deploy.
       - name: Install runtime requirements
         run: pip install -r requirements.txt
 
+      # No DJANGO_DEBUG here, so these run with the production settings.
       - name: Production build checks
-        env:
-          WP_PROD: "1"
         run: |
           python manage.py collectstatic --noinput
           python manage.py check --deploy --fail-level ERROR
@@ -69,4 +76,6 @@ jobs:
         run: black --check .
 
       - name: Tests
+        env:
+          DJANGO_DEBUG: "true"
         run: pytest

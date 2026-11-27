@@ -15,6 +15,9 @@ python manage.py migrate
 make run
 ```
 
+Dependencies: edit `requirements.in` / `requirements-testing.in`, then `make lock` (needs
+[uv](https://docs.astral.sh/uv/)) to re-pin the `.txt` files. `make upgrade` bumps every pin.
+
 `make test` runs the test suite (it creates a `wptest` database, so the
 Postgres user needs `CREATEDB`).
 
@@ -28,7 +31,8 @@ services, not in this repo:
 | `data`       | build `python manage.py collectstatic --noinput`, pre-deploy `python manage.py migrate`, start `gunicorn weeklypulls.wsgi --log-file -` |
 | `primecache` | cron `0 2 * * *`: `python manage.py primecache --limit 180`              |
 
-Production settings load when `WP_PROD` is set. Add any new client origin to
+Production settings are the default; `DJANGO_DEBUG=true` (in your local `.env`) switches to
+development settings. `/health/` is Railway's health check. Add any new client origin to
 `CORS_ALLOWED_ORIGINS` in `weeklypulls/settings/production.py`.
 
 ## primecache
