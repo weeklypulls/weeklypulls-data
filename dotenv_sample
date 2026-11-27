@@ -1,7 +1,5 @@
-LC_ALL=C.UTF-8
-POSTGRES_USER=weeklypulls
-POSTGRES_PASSWORD=weeklypulls
-POSTGRES_DB=weeklypulls
-DJANGO_SETTINGS_MODULE=weeklypulls.settings
-DJANGO_SECRET_KEY=randomcharacters
-DATABASE_URL=postgres://weeklypulls:weeklypulls@db:5432/weeklypulls
+DJANGO_SECRET_KEY=change-me
+# Postgres is required (Pull.read is an ArrayField)
+DATABASE_URL=postgres://weeklypulls:weeklypulls@localhost:5432/weeklypulls
+# Optional: without it, ComicVine lookups are skipped
+COMICVINE_API_KEY=

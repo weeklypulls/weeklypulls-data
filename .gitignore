@@ -12,3 +12,6 @@ __pycache__/
 .Python
 pip-log.txt
 *.sqlite3
+staticfiles/
+.pytest_cache/
+.venv/
