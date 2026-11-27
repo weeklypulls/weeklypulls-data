@@ -21,33 +21,23 @@ from weeklypulls.apps.pull_lists.models import PullList
 from weeklypulls.apps.pulls.permissions import IsPullListOwner
 from weeklypulls.settings.pagination import StandardResultsPagination
 
-try:
-    import django_filters  # type: ignore
-except Exception:  # pragma: no cover - optional in dev before deps installed
-    django_filters = None  # type: ignore
+import django_filters
 
-if django_filters is not None:
 
-    class IssueFilter(django_filters.FilterSet):
-        since = django_filters.DateFilter(field_name="date", lookup_expr="gte")
-        series_id = django_filters.NumberFilter(field_name="volume__cv_id")
-        search = django_filters.CharFilter(method="filter_search")
+class IssueFilter(django_filters.FilterSet):
+    since = django_filters.DateFilter(field_name="date", lookup_expr="gte")
+    series_id = django_filters.NumberFilter(field_name="volume__cv_id")
+    search = django_filters.CharFilter(method="filter_search")
 
-        def filter_search(self, queryset, name, value):  # type: ignore[no-redef]
-            if not value:
-                return queryset
-            # Search by volume (series) name; case-insensitive partial match
-            return queryset.filter(volume__name__icontains=value)
+    def filter_search(self, queryset, name, value):
+        if not value:
+            return queryset
+        # Search by volume (series) name; case-insensitive partial match
+        return queryset.filter(volume__name__icontains=value)
 
-        class Meta:
-            model = ComicVineIssue
-            fields = ["since", "series_id", "search"]
-
-else:
-    # Fallback no-op filter when django-filter isn't available yet
-    class IssueFilter:  # type: ignore
-        def __init__(self, _data, queryset):
-            self.qs = queryset
+    class Meta:
+        model = ComicVineIssue
+        fields = ["since", "series_id", "search"]
 
 
 logger = logging.getLogger(__name__)
@@ -60,23 +50,29 @@ class PullSerializer(serializers.HyperlinkedModelSerializer):
     series_title = serializers.SerializerMethodField()
     series_start_year = serializers.SerializerMethodField()
 
-    def get_series_title(self, obj):
-        from weeklypulls.apps.comicvine.models import ComicVineVolume
+    def validate_pull_list_id(self, pull_list):
+        request = self.context.get("request")
+        if request and pull_list.owner_id != request.user.id:
+            raise serializers.ValidationError("Not your pull list.")
+        return pull_list
 
-        volume = (
-            ComicVineVolume.objects.filter(cv_id=obj.series_id).only("name").first()
-        )
-        return volume.name if volume else None
-
-    def get_series_start_year(self, obj):
-        from weeklypulls.apps.comicvine.models import ComicVineVolume
-
-        volume = (
+    def _volume_field(self, obj, field):
+        # PullViewSet.get_queryset annotates these; fall back to a lookup for
+        # instances that didn't come from it (e.g. just created).
+        if hasattr(obj, field):
+            return getattr(obj, field)
+        model_field = {"series_title": "name", "series_start_year": "start_year"}[field]
+        return (
             ComicVineVolume.objects.filter(cv_id=obj.series_id)
-            .only("start_year")
+            .values_list(model_field, flat=True)
             .first()
         )
-        return volume.start_year if volume else None
+
+    def get_series_title(self, obj):
+        return self._volume_field(obj, "series_title")
+
+    def get_series_start_year(self, obj):
+        return self._volume_field(obj, "series_start_year")
 
     class Meta:
         model = Pull
@@ -255,7 +251,7 @@ class PullViewSet(viewsets.ModelViewSet):
 
     owner_lookup_field = "pull_list__owner"
 
-    permission_classes = (IsPullListOwner,)
+    permission_classes = (IsAuthenticated, IsPullListOwner)
     filter_backends = (IsOwnerFilterBackend, SearchFilter, OrderingFilter)
     pagination_class = StandardResultsPagination
     search_fields = ("series_title", "pull_list__title")
@@ -794,7 +790,7 @@ class MUPullViewSet(viewsets.ModelViewSet, CreateModelMixin):
 
     owner_lookup_field = "pull_list__owner"
 
-    permission_classes = (IsPullListOwner,)
+    permission_classes = (IsAuthenticated, IsPullListOwner)
     filter_backends = (IsOwnerFilterBackend,)
 
     def create(self, request, *args, **kwargs):

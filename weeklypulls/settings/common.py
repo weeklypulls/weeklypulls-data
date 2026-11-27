@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 import dj_database_url
+import django_cache_url
 
 BASE_DIR = Path(__file__).parent.parent.absolute()
 SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
@@ -15,6 +16,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.postgres",
     "django.contrib.sites",
     "corsheaders",
     "rest_framework",
@@ -110,8 +112,6 @@ TIME_ZONE = "UTC"
 
 USE_I18N = True
 
-USE_L10N = True
-
 USE_TZ = True
 
 PROJECT_ROOT = BASE_DIR.parent
@@ -120,12 +120,14 @@ STATIC_ROOT = PROJECT_ROOT / "staticfiles"
 STATIC_URL = "/static/"
 SITE_ID = 1
 
-# Simplified static file serving.
-# https://warehouse.python.org/project/whitenoise/
-STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"
+    },
+}
 
 # caching
-import django_cache_url
 
 CACHES = {"default": django_cache_url.config(default="locmem://")}
 CACHE_MIDDLEWARE_ALIAS = "weeklypulls"
@@ -134,18 +136,24 @@ CACHE_MIDDLEWARE_KEY_PREFIX = "wps_"
 
 # email config
 DEFAULT_FROM_EMAIL = "WeeklyPulls <staff@weeklypulls.com>"
-# Disable actual email sending by default; override via EMAIL_BACKEND env var when ready
-EMAIL_BACKEND = os.environ.get(
+# Email prints to the console unless EMAIL_BACKEND is set (e.g. to the SMTP backend).
+_email_backend = os.environ.get(
     "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
 )
-EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.sendgrid.net")
-EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
-EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
-EMAIL_PORT = int(os.environ.get("EMAIL_PORT", 587))
-EMAIL_USE_TLS = bool(os.environ.get("EMAIL_USE_TLS", True))
+_email_options = {}
+if _email_backend == "django.core.mail.backends.smtp.EmailBackend":
+    _email_options = {
+        "host": os.environ.get("EMAIL_HOST", "smtp.sendgrid.net"),
+        "port": int(os.environ.get("EMAIL_PORT", 587)),
+        "username": os.environ.get("EMAIL_HOST_USER", ""),
+        "password": os.environ.get("EMAIL_HOST_PASSWORD", ""),
+        "use_tls": os.environ.get("EMAIL_USE_TLS", "true").lower()
+        in ("1", "true", "yes"),
+    }
+MAILERS = {"default": {"BACKEND": _email_backend, "OPTIONS": _email_options}}
 
 # Allauth/dj-rest-auth: turn off email verification while email is disabled
-ACCOUNT_EMAIL_REQUIRED = False
+ACCOUNT_SIGNUP_FIELDS = ["email", "username*", "password1*", "password2*"]
 ACCOUNT_EMAIL_VERIFICATION = "none"
 
 # location of weeklypulls-marvel (deprecated)

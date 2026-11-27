@@ -1,5 +1,6 @@
 import arrow
 from rest_framework import routers, serializers, viewsets
+from rest_framework.permissions import IsAuthenticated
 
 from weeklypulls.apps.base.filters import IsOwnerFilterBackend
 from weeklypulls.apps.pull_lists.models import PullList
@@ -25,7 +26,7 @@ class PullListViewSet(viewsets.ModelViewSet):
 
     owner_lookup_field = "owner"
 
-    permission_classes = (IsOwner,)
+    permission_classes = (IsAuthenticated, IsOwner)
     filter_backends = (IsOwnerFilterBackend,)
 
     def perform_create(self, serializer):

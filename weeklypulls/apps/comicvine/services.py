@@ -3,7 +3,6 @@ import logging
 import datetime
 from datetime import timedelta
 from typing import Optional, Any, TypedDict, Dict, List
-import sqlite3
 
 from django.conf import settings
 from django.utils import timezone
