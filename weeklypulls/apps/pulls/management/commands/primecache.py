@@ -4,12 +4,24 @@ from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from django.db.models import Q
+from sentry_sdk.crons import monitor
 
 from weeklypulls.apps.comicvine.models import ComicVineVolume, ComicVineIssue
 from weeklypulls.apps.comicvine.services import ComicVineService
 from weeklypulls.apps.pulls.models import Pull
 
 logger = logging.getLogger(__name__)
+
+# Sentry Crons: alerts if the nightly Railway cron run fails, runs long, or
+# doesn't happen. Keep the schedule in sync with the primecache service.
+MONITOR_CONFIG = {
+    "schedule": {"type": "crontab", "value": "0 2 * * *"},
+    "timezone": "UTC",
+    "checkin_margin": 15,
+    "max_runtime": 60,
+    "failure_issue_threshold": 1,
+    "recovery_threshold": 1,
+}
 
 
 class Command(BaseCommand):
@@ -34,6 +46,13 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        if options["dry_run"]:
+            return self.prime(**options)
+        # A no-op unless Sentry is initialized (production with SENTRY_DSN).
+        with monitor(monitor_slug="primecache", monitor_config=MONITOR_CONFIG):
+            return self.prime(**options)
+
+    def prime(self, **options):
         limit = options["limit"]
         dry_run = options["dry_run"]
         force_volumes = options["force_volumes"]

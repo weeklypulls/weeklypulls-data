@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 import dj_database_url
+from corsheaders.defaults import default_headers
 import django_cache_url
 
 BASE_DIR = Path(__file__).parent.parent.absolute()
@@ -60,6 +61,9 @@ MIDDLEWARE = [
     # enable this for site-wide caching
     # 'django.middleware.cache.FetchFromCacheMiddleware',
 ]
+
+# The client's Sentry SDK adds these to API requests for distributed tracing.
+CORS_ALLOW_HEADERS = (*default_headers, "sentry-trace", "baggage")
 
 ROOT_URLCONF = "weeklypulls.urls"
 

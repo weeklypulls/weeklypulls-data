@@ -1,4 +1,7 @@
 from .common import *
+from .sentry import init_sentry
+
+init_sentry()
 
 DEBUG = False
 ALLOWED_HOSTS = [

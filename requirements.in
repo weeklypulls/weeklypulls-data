@@ -12,3 +12,4 @@ whitenoise>=6.12
 django-cache-url>=3.4.5
 python-dotenv>=1.0
 simyan>=4.2,<5
+sentry-sdk[django]>=3.0,<4
